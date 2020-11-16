@@ -49,8 +49,25 @@ The Parameter Store is used to save the values of
 The processing Logs will be recorded in the Cloudwatch logs. 
 
 
-Installation steps
-1. If you want to ensure that all traffic to your AWS resources is within the AWS Network , please use the script "Cloudformation_WithVPC.json".  It will create 
+### Installation
+
+0. Please ensure that you have run the [HIPAA QuickStart](https://docs.aws.amazon.com/quickstart/latest/compliance-hipaa/templates.html)
+
+To get started now, just sign in to your AWS account and create a stack based on criteria below. 
+1. ```git clone git@github.com:aws-samples/analysis-of-medical-device-data-using-data-lake.git```
+2. Upload the sample heart_rate_job.py to your S3 bucket and copy the location 
+```cd analysis-of-medical-device-data-using-data-lake```
+```aws s3 cp heart_rate_job.py  s3://[YOUR-BUCKET-NAME-HERE]```
+
+Copy the location of the job file s3://[YOUR-BUCKET-NAME-HERE]/heart_rate_job.py
+
+This script does not create the VPC, subnets , route tables etc.  
+
+3. If you want to ensure that all traffic to your AWS resources is within the AWS Network,  use the script "Cloudformation_WithVPC.json".  It will create VPC Endpoints for SQS, S3, DynamoDB, Glue, Athena, SSM.
+4. If you don't have to ensure all traffic to your AWS resorces is not to be restricted to AWS Network, you can use the script "Cloudformation_WithoutVPC.json". It will create same resources as 
+
+5. Supply all the parameters as required . 
+
 
 ## Security
 
