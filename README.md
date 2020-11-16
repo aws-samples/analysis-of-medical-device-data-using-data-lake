@@ -2,7 +2,7 @@
 
 This solution is built to allow ingestion of Medical Device Data into a Data Lake. 
 The sources of data can be diverse. The current solution is designed for ingestion via files . 
-It is recommended that you run the [HIPAA QuickStart] (https://docs.aws.amazon.com/quickstart/latest/compliance-hipaa/templates.html) prior.
+It is recommended that you run the [HIPAA QuickStart](https://docs.aws.amazon.com/quickstart/latest/compliance-hipaa/templates.html) prior to running the scripts here.
 
 
 
@@ -11,7 +11,7 @@ It is recommended that you run the [HIPAA QuickStart] (https://docs.aws.amazon.c
 Data encryption provides a strong layer of security to protect data that you store within AWS services. AWS services can help you achieve ubiquitous encryption 
 for data in transit as well as data at rest.
 
-<a><img src="images/Architecture.jpg" width="1760" height="860"></a>
+<a><img src="images/Architecture.jpg" ></a>
 
 ### Ingestion 
 In the Ingestion segment  this solution cerates the following component 
@@ -49,6 +49,8 @@ The Parameter Store is used to save the values of
 The processing Logs will be recorded in the Cloudwatch logs. 
 
 
+Installation steps
+1. If you want to ensure that all traffic to your AWS resources is within the AWS Network , please use the script "Cloudformation_WithVPC.json".  It will create 
 
 ## Security
 
