@@ -1,0 +1,1400 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "template",
+    "Parameters":{		
+		"VpcId" : {		  
+		  "Type" : "AWS::EC2::VPC::Id",
+		  "Description" : "VpcId of your existing Virtual Private Cloud (VPC)"
+		},
+		"VpcSubnetId1" : {
+			"Type" : "AWS::EC2::Subnet::Id",
+			"Description" : "Subnet #1 of your existing Virtual Private Cloud subnet (VPC) with NAT"
+		},
+		"VpcSubnetId2" : {
+		  "Type" : "AWS::EC2::Subnet::Id",
+		  "Description" : "Subnet #2 of your existing Virtual Private Cloud subnet (VPC) with NAT"
+		},
+	 
+		"VersionId" : {
+		  "Type" : "String",
+		  "Description" : "Versionid "	,
+		  "Default":"v1"
+		},
+		"GlueDatabaseName": {
+			"Type" : "String",
+			"Description" : "GlueDatabase "	,
+			"Default":"metric_database"		
+		},
+	 		  
+		"StagingBucketName": {
+            "Default": "sample-staging-bucket",
+            "Description": "Staging Bucket  name",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "64",
+            "AllowedPattern":  "[a-z0-9.-]*[a-z0-9]",
+            "ConstraintDescription": "must begin with a letter and contain only lowercase alphanumeric characters and periods and dashes ."
+        },
+		
+		"DataLakeBucketName": {
+            "Default": "datalake-bucket-name",
+            "Description": "DataLake Bucket Name",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "64",
+            "AllowedPattern":  "[a-z0-9.-]*[a-z0-9]",
+            "ConstraintDescription": "must begin with a letter and contain only lowercase alphanumeric characters and periods and dashes ."
+        },
+		"ProcessedBucketName": {
+            "Default": "processed-bucket-name",
+            "Description": "Processed Bucket Name",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "64",
+            "AllowedPattern":  "[a-z0-9.-]*[a-z0-9]",
+            "ConstraintDescription": "must begin with a letter and contain only lowercase alphanumeric characters and periods and dashes ."
+        },
+		"ProcessedBucketFolderPrefix": {
+            "Default": "processed/folder",
+            "Description": "Processed Bucket Folder Prefix",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "64",
+            "AllowedPattern":  "[a-z0-9._/]*[a-z0-9]",
+            "ConstraintDescription": "Contain only  alphanumeric characters ,  period (.) , forward slash (/)  and underscore (_) ."
+        },
+		"SQStriggerqueueName": {
+            "Default": "sqs_name",
+            "Description": "SQS Queue Name",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "64",
+            "AllowedPattern":  "[a-zA-Z0-9._]*[a-zA-Z0-9]",
+            "ConstraintDescription": "must begin with a letter and contain only  alphanumeric characters and periods and underscore ."
+        },
+		"StagingFolderPrefix": {
+            "Description": "Staging S3 Folder Prefix ",
+			"Default":"staging/input",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "64",
+            "AllowedPattern":  "[a-zA-Z0-9._/]*[a-z0-9A-Z]",
+            "ConstraintDescription": "Contain only  alphanumeric characters ,  period (.) , forward slash (/)  and underscore (_) ."
+        },
+		"DataLakeS3FolderPrefix": {
+            "Description": "DataLake Target S3 Folder Prefix ",
+			"Default": "datalake/folder",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "64",
+            "AllowedPattern":  "[a-zA-Z0-9._/]*[a-z0-9A-Z]",
+            "ConstraintDescription": "must begin with a letter and contain only  alphanumeric characters ,  period (.) , forward slash (/)  and underscore (_) ."
+        },
+		"EmailNotification": {
+            "Description": "Enter email address to notify processing errors",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "64",
+            "AllowedPattern":  "[a-zA-Z0-9._@]*[a-z0-9A-Z]",
+            "ConstraintDescription": "must begin with a letter and contain only  alphanumeric characters ,  period (.) , at (@)   and underscore (_)."
+        },
+		"AWSGlueServicePolicy": {
+            "Type": "String",
+			"Default":"arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole",
+            "Description": "Enter ARN of the AWS Glue Service Policy"
+        },
+		"AWSLambdaVPCAccessExecutionRole": {
+            "Type": "String",
+			"Default":"arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
+            "Description": "Enter ARN of the AWS Lambda VPC Access Execution Role"
+        },
+		"GlueJobScriptLocation": {
+            "Default": "s3://<bucket-name>/<python_file.py>",
+            "Description": "Staging Bucket  name",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "128",            
+            "ConstraintDescription": "must begin with a letter and contain only lowercase alphanumeric characters and periods and dashes ."
+        }		
+	},
+	"Resources":{			
+		"SQSTriggerQueue": {
+			"Type": "AWS::SQS::Queue",
+			"Properties" : {			
+			
+			"QueueName" : { "Ref" : "SQStriggerqueueName" }, 
+			"VisibilityTimeout" : "300"
+			}			
+		},
+		"LambdaSecurityGroup" : {			 
+		    "Type" : "AWS::EC2::SecurityGroup",
+		    "Properties" : {
+			  "GroupDescription" : "Allow Lambda to run in an VPC",	
+			  "VpcId" : {"Ref" : "VpcId"},		  
+			  "SecurityGroupEgress" : [{
+				 "IpProtocol" : "tcp",
+				 "FromPort" : 0,
+				 "ToPort" : 65535,
+				 "CidrIp" : "0.0.0.0/0"
+			  }]
+		   }
+		},
+		"InstanceSecurityGroup" : {
+			"DependsOn":["CustomResourceRTLambdaFunction1", "CustomResourceRTLambdaFunction1" ],
+		    "Type" : "AWS::EC2::SecurityGroup",
+		    "Properties" : {
+			  "GroupDescription" : "Allow access to VPC Endpoint",
+			  "VpcId" : {"Ref" : "VpcId"},
+			  "SecurityGroupIngress" : [{
+				 "IpProtocol" : "tcp",
+				 "FromPort" : 0,
+				 "ToPort" : 65535,
+				 "CidrIp" : { "Fn::GetAtt":["CustomResourceRTLambdaFunction1", "cidrblock"]}
+			  },
+			  {
+				 "IpProtocol" : "tcp",
+				 "FromPort" : 0,
+				 "ToPort" : 65535,
+				 "CidrIp" : { "Fn::GetAtt":["CustomResourceRTLambdaFunction2", "cidrblock"]}
+			  }],
+			  "SecurityGroupEgress" : [{
+				 "IpProtocol" : "tcp",
+				 "FromPort" : 0,
+				 "ToPort" : 65535,
+				 "CidrIp" : "0.0.0.0/0"
+			  }]
+		   }
+		},
+		"LambdaIAMPolicy": {
+			"Type": "AWS::IAM::Policy",
+			"Properties": {
+				"PolicyName" : { "Fn::Join": ["" ,["LambdaIAMPolicy", { "Ref": "VersionId"}]]},
+				"PolicyDocument": {
+					"Version": "2012-10-17",
+					"Statement": [
+					{
+						"Effect": "Allow",
+						"Action": [ "logs:CreateLogGroup","logs:CreateLogStream","logs:PutLogEvents" ],
+						"Resource": "arn:aws:logs:*:*:*"
+					},
+					{
+						"Effect": "Allow",
+						"Action": ["ec2:DescribeRouteTables" ],
+						"Resource": "*"
+					},
+					{
+						"Action": "ec2:DescribeSubnets",
+						"Effect": "Allow",
+						"Resource": "*"
+					},
+					{
+						"Action": [  "ssm:Get*",  "ssm:DescribeParameters"],
+						"Effect": "Allow",
+						"Resource": [
+							{ "Fn::Sub" :"arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/DL*"}
+						]
+					},
+					{
+						"Action": [ "ssm:Put*" ],
+						"Effect": "Allow",
+						"Resource": "*"
+					},						 				 
+					{
+						"Effect": "Allow",
+						"Action": [
+							"kms:Encrypt",
+							"kms:Decrypt",
+							"kms:ReEncrypt*",
+							"kms:GenerateDataKey",
+							"kms:DescribeKey"
+						],
+						"Resource": "*"
+					}
+					]
+				},
+				"Roles": [
+					{
+						"Ref": "CFLambdaExecutionRole"
+					}
+				]
+			}
+		},
+		"LambdaProcessorIAMPolicy": {
+			"Type": "AWS::IAM::Policy",
+			"Properties": {
+				"PolicyName" : { "Fn::Join": ["" ,["LambdaProcessorIAMPolicy", { "Ref": "VersionId"}]]},
+				"PolicyDocument": {
+					"Version": "2012-10-17",
+					"Statement": [
+					{
+						"Effect": "Allow",
+						"Action": [ "logs:CreateLogGroup","logs:CreateLogStream","logs:PutLogEvents" ],
+						"Resource": "arn:aws:logs:*:*:*"
+					},
+					{
+						"Effect": "Allow",
+						"Action": [	"ssm:GetParameter"	],
+						"Resource": [
+							{ "Fn::Sub" :"arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/DL*"}
+						]
+					},					
+					{
+						"Effect": "Allow",
+						"Action": [
+							"kms:Encrypt",
+							"kms:Decrypt",
+							"kms:ReEncrypt*",
+							"kms:GenerateDataKey",
+							"kms:DescribeKey"
+						],
+						"Resource": "*"
+					}]
+				},
+				"Roles": [
+					{
+						"Ref": "LambdaProcessorExecutionRole"
+					}
+				]
+			}
+		},
+		"LambdaProcessorSQSIAMPolicy": {
+			"Type": "AWS::IAM::Policy",
+			"Properties": {
+				"PolicyName" : { "Fn::Join": ["" ,["LambdaProcessorSQSIAMPolicy", { "Ref": "VersionId"}]]},
+				"PolicyDocument": {
+					"Version": "2012-10-17",
+					"Statement": [{						
+						"Effect": "Allow",
+						"Action": ["sqs:*"	],
+						"Resource": [ { "Fn::GetAtt":["SQSTriggerQueue", "Arn"]}]      						
+					}]
+				},			
+				"Roles": [{
+					"Ref": "LambdaProcessorExecutionRole"
+				}]
+			}
+		},	
+		"LambdaProcessorDynamoDBIAMPolicy": {
+			"Type": "AWS::IAM::Policy",
+			"Properties": {
+				"PolicyName" : { "Fn::Join": ["" ,["LambdaProcessorDynamoDBIAMPolicy", { "Ref": "VersionId"}]]},
+				"PolicyDocument": {
+					"Version": "2012-10-17",
+					"Statement": [
+					{
+						"Sid": "ListAndDescribe",
+						"Effect": "Allow",
+						"Action": [
+							"dynamodb:List*",
+							"dynamodb:DescribeReservedCapacity*",
+							"dynamodb:DescribeLimits",
+							"dynamodb:DescribeTimeToLive"
+						],
+						"Resource": "*"
+					},
+					{
+						"Sid": "SpecificTable",
+						"Effect": "Allow",
+						"Action": [
+							"dynamodb:BatchGet*",
+							"dynamodb:DescribeStream",
+							"dynamodb:DescribeTable",
+							"dynamodb:Get*",
+							"dynamodb:Query",
+							"dynamodb:Scan",
+							"dynamodb:BatchWrite*",
+							"dynamodb:Delete*",
+							"dynamodb:Update*",
+							"dynamodb:PutItem"
+						],
+						"Resource": "arn:aws:dynamodb:*:*:table/file_metric_table_1"
+					}						]
+				},			
+				"Roles": [{
+					"Ref": "LambdaProcessorExecutionRole"
+				}]
+			}
+		},
+		"SSMParameterGetIAMPolicy": {
+			"Type": "AWS::IAM::Policy",
+			"Properties": {
+				"PolicyName" : { "Fn::Join": ["" ,["SSMParameterGetIAMPolicy", { "Ref": "VersionId"}]]},
+				"PolicyDocument": {
+					"Version": "2012-10-17",
+					"Statement": [{
+						"Effect": "Allow",
+						"Action": [	"ssm:GetParameter"	],
+						"Resource": [
+							{ "Fn::Sub" :"arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/DL*"}
+						]
+					} 
+					]
+					
+				}	,		
+				"Roles": [{
+					"Ref": "LambdaProcessorExecutionRole"
+				},
+				{
+						"Ref": "GlueExecutionRole"
+				}]
+			}
+		},
+ 
+ 
+		"CreateSSMParamLambdaFunction": {
+			"Type": "AWS::Lambda::Function",
+			"Properties": {
+				"VpcConfig" : {
+					"SecurityGroupIds" :  [{ "Ref": "LambdaSecurityGroup"}],				
+					"SubnetIds":  [  {"Ref":  "VpcSubnetId1"  } , {"Ref":  "VpcSubnetId2"  }] 
+				},
+				"Runtime": "python3.6",
+				"Handler": "index.lambda_handler",
+				"Role" : {"Fn::GetAtt" : ["CFLambdaExecutionRole", "Arn"] },
+				"Code": {
+					"ZipFile" : {
+						"Fn::Join" : [
+							"\n", [
+							  "import json",
+							  "import boto3",
+							  "import urllib3",
+							  "http = urllib3.PoolManager()",
+							  "ssm = boto3.client('ssm')",
+							  "SUCCESS = \"SUCCESS\"",
+							  "FAILED = \"FAILED\"",
+							  "def send(event, context, responseStatus, responseData, physicalResourceId=None, noEcho=False):",
+							  "    responseUrl = event['ResponseURL']",
+							  "    print(responseUrl)",
+							  "    responseBody = {}",
+							  "    responseBody['Status'] = responseStatus",
+							  "    responseBody['Reason'] = 'See the details in CloudWatch Log Stream: ' + context.log_stream_name",
+							  "    responseBody['PhysicalResourceId'] = physicalResourceId or context.log_stream_name",
+							  "    responseBody['StackId'] = event['StackId']",
+							  "    responseBody['RequestId'] = event['RequestId']",
+							  "    responseBody['LogicalResourceId'] = event['LogicalResourceId']",
+							  "    responseBody['NoEcho'] = noEcho",
+							  "    responseBody['Data'] = responseData",
+							  "    json_responseBody = json.dumps(responseBody)",
+							  "    print(\"Response body:\" + json_responseBody)",
+							  "    headers = {",
+							  "        'content-type' : '',",
+							  "        'content-length' : str(len(json_responseBody))",
+							  "    }",
+							  "    try:",
+							  "        response = http.request('PUT',",
+							  "          responseUrl,",
+                              "          body = json_responseBody,",
+							  "          headers = {'Content-Type': 'application/json'},",
+							  "          retries = False)",
+							  "        print( response.status)",
+							  "    except Exception as e:",
+							  "        print(\"send(..) failed executing requests.put(..): \" + str(e))",
+							  "    return json_responseBody ",
+							  " ",
+							  "def create_ssm(ssm_name, ssm_desc, ssm_value, key_id):",							  
+							  "    version = '-1'",
+							  "    for x in range(3):",
+							  "        try:",
+							  "            response1 = ssm.put_parameter(Name=ssm_name,Description=ssm_desc, Value=ssm_value, Type='SecureString', KeyId=key_id, Overwrite=True)",
+							  "            flag = True",
+							  "            version = response1['Version']",
+							  "            break",
+							  "        except Exception as inst:",  
+							  "            print(inst)",							  
+							  "    return version",
+							  "",
+							  "def lambda_handler(event, context):",
+							  "    print(event)",
+							  "    response_data = {}",
+							  "    key_id = event['ResourceProperties']['key_id']",
+							  "    ssm_desc = event['ResourceProperties']['ssm_desc']",
+							  "    ssm_name = event['ResourceProperties']['ssm_name']",
+							  "    ssm_value = event['ResourceProperties']['ssm_value']",
+							  "    if event['RequestType'] == 'Create' or event['RequestType'] == 'Update' : ",
+							  "        version = create_ssm(ssm_name, ssm_desc, ssm_value, key_id)",							  
+							  "        response_data['Version'] = version",
+							  "        response_body = send(event, context, \"SUCCESS\", response_data)",
+							  "    else :",
+							  "        response_data['Version'] = '0'",
+							  "        response_body = send(event, context, \"SUCCESS\",  response_data)",
+							  "    return  response_body"
+							]
+						]
+					}
+				},
+				"Timeout": "30"				 
+			}
+		},		
+		
+		"CreateSQSTriggerLambdaFunction": {
+			"Type": "AWS::Lambda::Function",
+			"Properties": {
+				"VpcConfig" : {
+					"SecurityGroupIds" :  [{ "Ref": "LambdaSecurityGroup"}],				
+					"SubnetIds":  [  {"Ref":  "VpcSubnetId1"  } , {"Ref":  "VpcSubnetId2"  }] 
+				},
+				"FunctionName":"SQSTriggerLambdaFunction",
+				"Runtime": "python3.6",
+				"Handler": "index.lambda_handler",
+				"Role" : {"Fn::GetAtt" : ["LambdaProcessorExecutionRole", "Arn"] },
+				"Code": {
+					"ZipFile" : {
+						"Fn::Join" : [
+							"\n", [
+							  "import json",
+							  "import boto3",
+							  "import urllib3",		
+							  "import datetime",							  
+							  "ssm = boto3.client('ssm')",
+							  "sns = boto3.client('sns')",
+							  "glue = boto3.client('glue')",							  							  
+							  "sqs = boto3.client('sqs')",
+							  "dynamodb = boto3.resource('dynamodb')",							  
+							  "patient_table = dynamodb.Table('file_metric_table_1') ",							  
+							  "def sendSNS(snsArn, message, subject ) : ",
+							  "    response = sns.publish(TargetArn=snsArn,  Message=json.dumps({'default': json.dumps(message)}), Subject=subject, MessageStructure='json' )",
+							  "    print(\"message : \" + json.dumps(message) + \" to ARN : \" + snsArn)",
+							  "",
+							  "def getParameter(paramName):",
+							  "    parameter = ssm.get_parameter(Name=paramName, WithDecryption=True)",
+							  "    print(parameter['Parameter']['Value'])",
+							  "    return parameter['Parameter']['Value']",							  
+							  "def insertItem( file_key, job_id): ",
+							  "    timenow = str(datetime.datetime.now())",
+							  "    patient_table.put_item( Item={ 'file_name': file_key,'date_of_processing': timenow,  'job_id' : job_id } )",
+							  "",
+							  "def checkIfFileAlreadyProcessed (file_key):",
+							  "    try : ",
+							  "        response = patientTable.get_item(Key={'file_name': file_key},ConsistentRead=True )",
+							  "        item = response['Item']",
+							  "        print(\"Already exists \" + str(item))",
+							  "        return item['date_of_processing'] ",
+							  "    except Exception as inst:",  
+							  "        return \"not_found\"",
+							  "",
+							  "snsArn = getParameter('DL-datalake_failure_arn') ",
+							  "def lambda_handler(event, context):",
+							  "    print(event)",							  
+							  "    for record in event['Records']:",
+							  "        payload=record['body']",
+							  "        payloadStr = str(payload)",
+							  "        print('body is ' + payloadStr)",
+							  "        x = json.loads(payloadStr)",
+							  "        if \"event\" in x:",
+							  "            if x['Event'] == 's3:TestEvent':",
+							  "                message = {\"Status \" : \"Lambda received   \" , \"filename\":  x['Event'] , \"OriginalTime\" : 'now' }",
+							  "                subject = \" Test file received \" + x['Event']",
+							  "                sendSNS(snsArn,message, subject)",
+							  "                return",
+							  "        else:",
+							  "            print(\"the event type didnt match test event \")",            
+							  "        bucket_name = x['Records'][0]['s3']['bucket']['name']",
+							  "        file_key = x['Records'][0]['s3']['object']['key']",
+							  "        originalTime = checkIfFileAlreadyProcessed(file_key)",
+                              "        if originalTime != \"not_found\" :",
+							  "            print(\"file already processed \" + file_key)",
+							  "            message = {\"error \" : \"Lambda already processed file  \" , \"filename\":  file_key , \"OriginalTime\" : originalTime }",
+							  "            subject = \" Duplicate file received \" + file_key",
+							  "            sendSNS(snsArn,message, subject)",
+							  "            return ",      
+							  "        glueJobName = ''" ,     
+							  "        jobRunId = 'UnKnown'",
+							  "        if file_key.find('heart_rate') > -1:",
+							  "            glueJobName = 'heart_rate_job'  ",      
+							  "        if file_key.find('someother_metric') > -1:",
+							  "            glueJobName = 'someother_job'  ",      
+							  "        if glueJobName != ''  :",
+							  "            response = glue.start_job_run(JobName = glueJobName, ",
+							  "                Arguments = {",
+							  "                    '--bucketname' : bucket_name,",
+							  "                    '--filename': file_key }",
+							  "            )",
+							  "            print('## STARTED GLUE JOB: ' + glueJobName)",
+							  "            jobRunId = response['JobRunId']",
+							  "            print('## GLUE JOB RUN ID: ' + jobRunId)",
+							  "            print('## STARTED GLUE JOB: ' + glueJobName)",							  
+							  "        insertItem(file_key, jobRunId)",
+							  "        sendSNS(snsArn,\"got the file : \" + file_key , \"You are getting the file \")",							  
+							  "    return "
+							]
+						]
+					}
+				},
+				"Timeout": "30"
+			}
+		},
+		"SQSTriggerMappingToLambda": {
+			"Type" : "AWS::Lambda::EventSourceMapping",
+			"DependsOn":["CreateSQSTriggerLambdaFunction", "SQSTriggerQueue", "LambdaProcessorSQSIAMPolicy"],
+			"Properties" : {
+				"BatchSize":"1",
+				"Enabled":"true",
+				"EventSourceArn":  { "Fn::GetAtt":["SQSTriggerQueue", "Arn"] }, 
+				"FunctionName": {"Fn::GetAtt" : ["CreateSQSTriggerLambdaFunction", "Arn"] } 
+			}
+		},
+		"GetRouteTableLambdaFunction": {
+			"Type": "AWS::Lambda::Function",
+			"DependsOn":["LambdaIAMPolicy"],
+			"Properties": {
+				"VpcConfig" : {
+					"SecurityGroupIds" :  [{ "Ref": "LambdaSecurityGroup"}],				
+					"SubnetIds":  [  {"Ref":  "VpcSubnetId1"  } , {"Ref":  "VpcSubnetId2"  }] 
+				},
+				"Runtime": "python3.6",
+				"Handler": "index.lambda_handler",
+				"Role" : {"Fn::GetAtt" : ["CFLambdaExecutionRole", "Arn"] },
+				"Code": {
+					"ZipFile" : {
+						"Fn::Join" : [
+							"\n", [
+							  "import json",
+							  "import boto3",
+							  "import urllib3",
+							  "import signal",
+							  "http = urllib3.PoolManager()",
+							  "ec2 = boto3.client('ec2')",
+							  "SUCCESS = \"SUCCESS\"",
+							  "FAILED = \"FAILED\"",
+							  "def send(event, context, responseStatus, responseData, physicalResourceId=None, noEcho=False):",
+							  "    responseUrl = event['ResponseURL']",
+							  "    print(responseUrl)",
+							  "    responseBody = {}",
+							  "    responseBody['Status'] = responseStatus",
+							  "    responseBody['Reason'] = 'See the details in CloudWatch Log Stream: ' + context.log_stream_name",
+							  "    responseBody['PhysicalResourceId'] = physicalResourceId or context.log_stream_name",
+							  "    responseBody['StackId'] = event['StackId']",
+							  "    responseBody['RequestId'] = event['RequestId']",
+							  "    responseBody['LogicalResourceId'] = event['LogicalResourceId']",
+							  "    responseBody['NoEcho'] = noEcho",
+							  "    responseBody['Data'] = responseData",
+							  "    json_responseBody = json.dumps(responseBody)",
+							  "    print(\"Response body:\" + json_responseBody)",
+							  "    headers = {",
+							  "        'content-type' : '',",
+							  "        'content-length' : str(len(json_responseBody))",
+							  "    }",
+							  "    try:",
+							  "        response = http.request('PUT',",
+							  "          responseUrl,",
+                              "          body = json_responseBody,",
+							  "          headers = {'Content-Type': 'application/json'},",
+							  "          retries = False)",
+							  "        print( response.status)",
+							  "    except Exception as e:",
+							  "        print(\"send(..) failed executing requests.put(..): \" + str(e))",
+							  "    return json_responseBody ",
+							  "",
+							  "def timeout_handler(_signal, _frame):",
+							  "    print(\"about to timeout\")",
+							  "    return",
+							  "",
+							  "def lambda_handler(event, context):",
+							  "    signal.alarm(int(context.get_remaining_time_in_millis() / 1000) - 1)",							  
+							  "    print(event)",
+							  "    response_data = {}",
+							  "    subnet_id = event['ResourceProperties']['subnet_id']",
+							  "    vpc_id = event['ResourceProperties']['vpc_id']",
+							  "    print(\"the vpcId \"  + vpc_id)",
+							  "    print(\"the subnet_id \"  + subnet_id)",
+							  "    if event['RequestType'] == 'Create' or event['RequestType'] == 'Update' : ",
+							  "        response1 = ec2.describe_route_tables( Filters=[ {  'Name': 'association.subnet-id','Values': [subnet_id] } ])",
+							  "        rt = {}",
+							  "        if len(response1['RouteTables']) > 0 : ",
+							  "            rt = response1['RouteTables'][0]['RouteTableId']",
+							  "            print(response1)",
+							  "            print(\"@@@@\")",							  							  
+							  "        else:",
+							  "            response1 = ec2.describe_route_tables( Filters=[   {  'Name'  : 'vpc-id', 'Values': [vpc_id ] } , ",
+							  "               {'Name':'association.main', 'Values': ['true']} ])",
+							  "            print(response1)",
+							  "            print(\"####\")",							  
+							  "            rt = response1['RouteTables'][0]['RouteTableId']",
+							  "        response2= ec2.describe_subnets(SubnetIds=[subnet_id])",
+							  "        cidrblock = response2['Subnets'][0]['CidrBlock']",
+							  "        response_data['routetable'] = rt",
+							  "        response_data['cidrblock'] = cidrblock",
+							  "        response_body = send(event, context, \"SUCCESS\", response_data)",
+							  "    else :",
+							  "        response_data['routetable'] = \"ok\"",
+							  "        response_data['cidrblock'] = \"ok\"",
+							  "        response_body = send(event, context, \"SUCCESS\",  response_data)",
+							  "    return  response_body",
+							  "signal.signal(signal.SIGALRM, timeout_handler)"
+							]
+						]
+					}
+				},
+				"Timeout": "30"
+			}
+		},
+		"CustomResourceRTLambdaFunction1": {
+			"DependsOn":["GetRouteTableLambdaFunction", "LambdaIAMPolicy"],
+			"Type": "Custom::GetRouteTable",
+			"Properties": {
+				"ServiceToken" : {"Fn::GetAtt":["GetRouteTableLambdaFunction", "Arn"]},
+				"Region": { "Ref": "AWS::Region" },
+				"subnet_id" : { "Ref":  "VpcSubnetId1"  },
+				 "vpc_id" : {"Ref" : "VpcId"}
+			}
+		},
+		"CustomResourceRTLambdaFunction2": {
+			"DependsOn":["GetRouteTableLambdaFunction", "LambdaIAMPolicy"],
+			"Type": "Custom::GetRouteTable",
+			"Properties": {
+				"ServiceToken" : {"Fn::GetAtt":["GetRouteTableLambdaFunction", "Arn"]},
+				"Region": { "Ref": "AWS::Region" },
+				"subnet_id" : { "Ref":  "VpcSubnetId2"  },
+				"vpc_id" : {"Ref" : "VpcId"}
+			}
+		},
+
+ 
+ 
+	 
+	 
+		"SQSPublishPolicy": {
+			"Type": "AWS::SQS::QueuePolicy",
+			"Properties": {
+				"PolicyDocument": {
+					"Id": "publish_statement_policy",
+					"Version": "2012-10-17",
+					"Statement": [{
+						"Sid": "publish_statement-id",
+						"Action": "SQS:SendMessage",
+						"Effect": "Allow",
+						"Principal": { "Service": "s3.amazonaws.com" },                        
+						"Resource":  { "Fn::GetAtt" : ["SQSTriggerQueue" , "Arn"]},
+						"Condition": {
+							"ArnLike": {
+								 "aws:SourceArn": { "Fn::Join": [ "", [ "arn:aws:s3:::", {"Ref":"StagingBucketName"} ]] }
+							}
+						}
+					}]
+				},
+				"Queues": [ { "Ref": "SQSTriggerQueue" } ]
+			}
+		},
+		"StagingBucket": {
+			"Type": "AWS::S3::Bucket",
+			"DependsOn":["SQSPublishPolicy", "SQSTriggerQueue"],
+			"Properties" : {			
+				"AccessControl": "Private",
+				"NotificationConfiguration": {
+                    "QueueConfigurations": [ {
+                            "Event": "s3:ObjectCreated:*",
+							"Filter": {
+								"S3Key" : {
+									"Rules" : [ {
+										"Name" : "prefix",
+										"Value" : { "Ref": "StagingFolderPrefix"}
+									}]
+								}
+							},
+							"Queue" : { "Fn::GetAtt" : ["SQSTriggerQueue" , "Arn"]}
+                        }
+                    ]
+                },
+				"BucketEncryption" : {
+					"ServerSideEncryptionConfiguration" : [ {
+						"ServerSideEncryptionByDefault" :  {  "SSEAlgorithm": "AES256" }
+					}]
+				},
+				"BucketName" : { "Ref" : "StagingBucketName" }, 
+				"PublicAccessBlockConfiguration" : {
+					"BlockPublicAcls" : "True",
+					"BlockPublicPolicy" : "True",
+					"IgnorePublicAcls" : "True",
+					"RestrictPublicBuckets" : "True"
+				}
+			}			
+		},
+		"DataLakeBucket": {
+			"Type": "AWS::S3::Bucket",			 
+			"Properties" : {			
+				"AccessControl": "Private",                 
+				"BucketEncryption" : {
+					"ServerSideEncryptionConfiguration" : [ {
+						"ServerSideEncryptionByDefault" :  {  "SSEAlgorithm": "AES256" }
+					}]
+				},
+				"BucketName" : { "Ref" : "DataLakeBucketName" }, 
+				"PublicAccessBlockConfiguration" : {
+					"BlockPublicAcls" : "True",
+					"BlockPublicPolicy" : "True",
+					"IgnorePublicAcls" : "True",
+					"RestrictPublicBuckets" : "True"
+				}
+			}			
+		},
+		"ProcessedBucket": {
+			"Type": "AWS::S3::Bucket",			 
+			"Properties" : {			
+				"AccessControl": "Private",                 
+				"BucketEncryption" : {
+					"ServerSideEncryptionConfiguration" : [ {
+						"ServerSideEncryptionByDefault" :  {  "SSEAlgorithm": "AES256" }
+					}]
+				},
+				"BucketName" : { "Ref" : "ProcessedBucketName" }, 
+				"PublicAccessBlockConfiguration" : {
+					"BlockPublicAcls" : "True",
+					"BlockPublicPolicy" : "True",
+					"IgnorePublicAcls" : "True",
+					"RestrictPublicBuckets" : "True"
+				}
+			}			
+		},
+		"CFLambdaExecutionRole"	: {		
+			"Type" : "AWS::IAM::Role",
+			"Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "lambda.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+				}, 
+				"RoleName" : { "Fn::Join": ["" ,["CFLambdaExecutionRole", { "Ref": "VersionId"}]]},
+				"ManagedPolicyArns": [                     
+					{
+						"Ref":"AWSLambdaVPCAccessExecutionRole"
+					}
+                ]
+			}
+		}, 
+		"LambdaProcessorExecutionRole"	: {		
+			"Type" : "AWS::IAM::Role",
+			"Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "lambda.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+				}, 
+				"ManagedPolicyArns": [
+                    {
+                        "Ref": "AWSGlueServicePolicy"
+                    },
+					{
+						"Ref":"AWSLambdaVPCAccessExecutionRole"
+					}
+                ],
+				"RoleName" : { "Fn::Join": ["" ,["LambdaProcessorExecutionRole", { "Ref": "VersionId"}]]}
+				
+			}
+		},
+		"GlueExecutionRole"	: {		
+			"Type" : "AWS::IAM::Role",
+			"Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "glue.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+				}, 
+				"ManagedPolicyArns": [
+                    {
+                        "Ref": "AWSGlueServicePolicy"
+                    }
+                ],
+				"RoleName" : { "Fn::Join": ["" ,["GlueExecutionRole", { "Ref": "VersionId"}]]}
+			}
+		}, 
+		"SSMKmsKey" : {
+			"Type" : "AWS::KMS::Key",
+			"DependsOn" : [ "CFLambdaExecutionRole", "GlueExecutionRole"],
+			"Properties" : {
+				"Description" : "key for SSM",
+				"KeyPolicy" : {
+					"Id": "key-consolepolicy-3",
+					"Version": "2012-10-17",
+					"Statement": [
+					{
+						"Sid": "Enable IAM User Permissions",
+						"Effect": "Allow",
+						"Principal": {
+							"AWS":  { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" }
+						},
+						"Action": "kms:*",
+						"Resource": "*"
+					},
+					{
+						"Sid": "AllowuseofthekeyforGlue",
+						"Effect": "Allow",
+						"Principal": {
+							"AWS": { "Fn::GetAtt": ["GlueExecutionRole","Arn"]}
+						},
+						"Action": [							
+							"kms:Decrypt",
+							"kms:DescribeKey"
+						],
+						"Resource": "*"
+					},
+					{
+						"Sid": "AllowuseofthekeyforLambda",
+						"Effect": "Allow",
+						"Principal": {
+							"AWS": { "Fn::GetAtt": ["CFLambdaExecutionRole","Arn"]}
+						},
+						"Action": [
+							"kms:Encrypt",
+							"kms:Decrypt",
+							"kms:ReEncrypt*",
+							"kms:GenerateDataKey",
+							"kms:DescribeKey"
+						],
+						"Resource": "*"
+					}]
+				}
+			}
+		},
+		"DynamoDBKmsKey" : {
+			"Type" : "AWS::KMS::Key",
+			"DependsOn" : [ "CFLambdaExecutionRole", "GlueExecutionRole"],
+			"Properties" : {
+				"Description" : "key for Dynamodb",
+				"KeyPolicy" : {
+					"Id": "key-consolepolicy-3",
+					"Version": "2012-10-17",
+					"Statement": [
+					{
+						"Sid": "Enable IAM User Permissions",
+						"Effect": "Allow",
+						"Principal": {
+							"AWS":  { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" }
+						},
+						"Action": "kms:*",
+						"Resource": "*"
+					},
+					{
+						"Sid": "AllowuseofthekeyforGlue",
+						"Effect": "Allow",
+						"Principal": {
+							"AWS": { "Fn::GetAtt": ["GlueExecutionRole","Arn"]}
+						},
+						"Action": [							
+							"kms:Decrypt",
+							"kms:DescribeKey"
+						],
+						"Resource": "*"
+					},
+					{
+						"Sid": "AllowuseofthekeyforLambda",
+						"Effect": "Allow",
+						"Principal": {
+							"AWS": { "Fn::GetAtt": ["CFLambdaExecutionRole","Arn"]}
+						},
+						"Action": [
+							"kms:Encrypt",
+							"kms:Decrypt",
+							"kms:ReEncrypt*",
+							"kms:GenerateDataKey",
+							"kms:DescribeKey"
+						],
+						"Resource": "*"
+					}]
+				}
+			}
+		},
+		"SSMKeyAlias" : {
+			"Type" : "AWS::KMS::Alias",
+			"Properties" : {
+				"AliasName" : {"Fn::Join": [ "", ["alias/ssmKey",{ "Ref": "VersionId"}]]},
+				"TargetKeyId" : {"Ref": "SSMKmsKey"}
+			}
+		},
+		"DynamoDBKeyAlias" : {
+			"Type" : "AWS::KMS::Alias",
+			"Properties" : {				
+				"AliasName" : {"Fn::Join": [ "", ["alias/dynamodbKey",{ "Ref": "VersionId"}]]},
+				"TargetKeyId" : {"Ref": "DynamoDBKmsKey"}
+			}
+		},
+		"DynamoDBTable" : {
+			"Type" : "AWS::DynamoDB::Table",
+			"Properties" : {				
+				"AttributeDefinitions" : [{
+					"AttributeName" : "file_name",
+					"AttributeType" : "S"   
+				}],
+				"KeySchema" : [{
+					"AttributeName" : "file_name",
+					"KeyType" : "HASH"
+				}],
+				"TableName" : "file_metric_table_1",
+				 "ProvisionedThroughput" : {
+					"ReadCapacityUnits" : "5",
+					"WriteCapacityUnits" : "5"
+				},
+				"SSESpecification": {
+					"KMSMasterKeyId" : { "Ref" : "DynamoDBKeyAlias" },
+					"SSEEnabled" : "True",
+					"SSEType" : "KMS"
+				}
+			}
+		},		
+		"StagingBucketIAMPolicy":  {
+			"Type": "AWS::IAM::Policy",
+			"Properties": {
+				"PolicyName": "StagingBucketIAMPolicy",
+				"PolicyDocument": {
+					"Version": "2012-10-17",
+					"Statement": [
+						{
+							"Effect": "Allow",
+							"Action": [
+								"s3:ListBucket"
+							],
+							"Resource":[ { "Fn::GetAtt" : [ "StagingBucket","Arn" ] }]
+						},
+						{
+							"Effect": "Allow",
+							"Action": [
+								"s3:PutObject",
+								"s3:GetObject",
+								"s3:DeleteObject"
+							],
+							"Resource": [ { "Fn::Join":[ "", [{ "Fn::GetAtt" : [ "StagingBucket","Arn" ]},"/*" ] ] }                ]
+						}
+					]
+				},
+				"Roles": [
+					{
+						"Ref": "CFLambdaExecutionRole"
+					},
+					{
+						"Ref": "GlueExecutionRole"
+					}, 
+					{
+						"Ref":"LambdaProcessorExecutionRole"					
+					}
+					
+				]				 
+			}		
+		},
+		"DataLakeBucketIAMPolicy":  {
+			"Type": "AWS::IAM::Policy",
+			"Properties": {
+				"PolicyName": "DataLakeBucketIAMPolicy",
+				"PolicyDocument": {
+					"Version": "2012-10-17",
+					"Statement": [
+						{
+							"Effect": "Allow",
+							"Action": [
+								"s3:ListBucket"
+							],
+							"Resource":[ { "Fn::GetAtt" : [ "DataLakeBucket", "Arn" ] }]
+						},
+						{
+							"Effect": "Allow",
+							"Action": [
+								"s3:PutObject",
+								"s3:GetObject",
+								"s3:DeleteObject"
+							],
+							"Resource": [ { "Fn::Join":[ "", [{ "Fn::GetAtt" : [ "DataLakeBucket", "Arn" ]},"/*" ] ] }                ]
+						}
+					]
+				},
+				"Roles": [					 
+					{
+						"Ref": "GlueExecutionRole"
+					}
+				]				 
+			}		
+		},
+		"ProcessedBucketIAMPolicy":  {
+			"Type": "AWS::IAM::Policy",
+			"Properties": {
+				"PolicyName": "ProcessedBucketIAMPolicy",
+				"PolicyDocument": {
+					"Version": "2012-10-17",
+					"Statement": [
+						{
+							"Effect": "Allow",
+							"Action": [
+								"s3:ListBucket"
+							],
+							"Resource":[ { "Fn::GetAtt" : [ "ProcessedBucket", "Arn" ] }]
+						},
+						{
+							"Effect": "Allow",
+							"Action": [
+								"s3:PutObject",
+								"s3:GetObject",
+								"s3:DeleteObject"
+							],
+							"Resource": [ { "Fn::Join":[ "", [{ "Fn::GetAtt" : [ "ProcessedBucket", "Arn" ]},"/*" ] ] }                ]
+						}
+					]
+				},
+				"Roles": [					 
+					{
+						"Ref": "GlueExecutionRole"
+					}
+				]				 
+			}		
+		},
+		"SNSPublishIAMPolicy": {
+			"Type": "AWS::IAM::Policy",
+			"DependsOn":["ErrorSNSTopic"],
+			"Properties": {
+				"PolicyName": "SNSPublishPolicyIAMPolicy",
+				"PolicyDocument": {
+					"Version": "2012-10-17",
+					"Statement": [
+					{
+						"Effect": "Allow",
+						"Action": "sns:Publish",
+						"Resource": { "Ref" : "ErrorSNSTopic" }
+					}
+					]
+				},
+				"Roles": [
+					{
+						"Ref": "CFLambdaExecutionRole"
+					},
+					{
+						"Ref": "GlueExecutionRole"
+					},					
+					{
+						"Ref": "LambdaProcessorExecutionRole"
+					}
+				]
+			}
+		},
+		"ErrorSNSTopic" :  {		 
+            "Type": "AWS::SNS::Topic"
+        },
+		"ErrorSubscription" : {
+			"Type" : "AWS::SNS::Subscription",
+			"Properties" : {
+				"Endpoint" : {"Ref": "EmailNotification"},
+				"Protocol" : "email",
+				"TopicArn" : { "Ref" : "ErrorSNSTopic" }
+			}
+		},
+		"DataLakeTargetBucketSSM": {
+			"DependsOn":["CreateSSMParamLambdaFunction"],
+			"Type": "Custom::PutParameter",
+			"Properties": {
+				"ServiceToken" : {"Fn::GetAtt":["CreateSSMParamLambdaFunction", "Arn"]},
+				"Region": { "Ref": "AWS::Region" },
+				"key_id" : { "Ref": "SSMKmsKey"   },
+				"ssm_name" :  "DL-datalake_target_bucket" ,
+				"ssm_desc" :  "datalake_target_bucket name  saved in SSM " ,
+				"ssm_value" : { "Ref": "DataLakeBucketName" }
+			}
+		},
+		"DataLakeFailureArnSSM": {
+			"DependsOn":["CreateSSMParamLambdaFunction"], 
+			"Type": "Custom::PutParameter",
+			"Properties": {
+				"ServiceToken" : {"Fn::GetAtt":["CreateSSMParamLambdaFunction", "Arn"]},
+				"Region": { "Ref": "AWS::Region" },
+				"key_id" : { "Ref": "SSMKmsKey"   },
+				"ssm_name" :  "DL-datalake_failure_arn" ,
+				"ssm_desc" :  "datalake_failure arn  saved in SSM " ,
+				"ssm_value" : { "Ref": "ErrorSNSTopic" }
+			}
+		},
+		"DataLakeFolderPrefixSSM": {
+			"DependsOn":["CreateSSMParamLambdaFunction"], 
+			"Type": "Custom::PutParameter",
+			"Properties": {
+				"ServiceToken" : {"Fn::GetAtt":["CreateSSMParamLambdaFunction", "Arn"]},
+				"Region": { "Ref": "AWS::Region" },
+				"key_id" : { "Ref": "SSMKmsKey"   },
+				"ssm_name" :  "DL-datalake_bucket_prefix" ,
+				"ssm_desc" :  "datalake_folder location" ,
+				"ssm_value" : { "Ref": "DataLakeS3FolderPrefix" }
+			}
+		},
+		"SQStriggerqueueNameSSM": {
+			"DependsOn":["CreateSSMParamLambdaFunction"], 
+			"Type": "Custom::PutParameter",
+			"Properties": {
+				"ServiceToken" : {"Fn::GetAtt":["CreateSSMParamLambdaFunction", "Arn"]},
+				"Region": { "Ref": "AWS::Region" },
+				"key_id" : { "Ref": "SSMKmsKey"   },
+				"ssm_name" :  "DL-staging_trigger_queue" ,
+				"ssm_desc" :  "staging_trigger_queue" ,
+				"ssm_value" : { "Ref": "SQSTriggerQueue" }
+			}
+		},
+		"ProcessedBucketNameSSM": {
+			"DependsOn":["CreateSSMParamLambdaFunction"], 
+			"Type": "Custom::PutParameter",
+			"Properties": {
+				"ServiceToken" : {"Fn::GetAtt":["CreateSSMParamLambdaFunction", "Arn"]},
+				"Region": { "Ref": "AWS::Region" },
+				"key_id" : { "Ref": "SSMKmsKey"   },
+				"ssm_name" :  "DL-processed_bucket" ,
+				"ssm_desc" :  "bucket to where the files are moved   from staging" ,
+				"ssm_value" : { "Ref": "ProcessedBucketName" }
+			}
+		},
+		"ProcessedBucketFolderPrefixSSM": {
+			"DependsOn":["CreateSSMParamLambdaFunction"], 
+			"Type": "Custom::PutParameter",
+			"Properties": {
+				"ServiceToken" : {"Fn::GetAtt":["CreateSSMParamLambdaFunction", "Arn"]},
+				"Region": { "Ref": "AWS::Region" },
+				"key_id" : { "Ref": "SSMKmsKey"   },
+				"ssm_name" :  "DL-processed_location_prefix" ,
+				"ssm_desc" :  "bucket to where the files are moved   from staging" ,
+				"ssm_value" : { "Ref": "ProcessedBucketFolderPrefix" }
+			}
+		},
+		"DataLakeAthenaDatabaseSSM": {
+		
+			"DependsOn":["CreateSSMParamLambdaFunction", "GlueDatabase"], 
+			"Type": "Custom::PutParameter",
+			"Properties": {
+				"ServiceToken" : {"Fn::GetAtt":["CreateSSMParamLambdaFunction", "Arn"]},
+				"Region": { "Ref": "AWS::Region" },
+				"key_id" : { "Ref": "SSMKmsKey"   },
+				"ssm_name" :  "DL-datalake_athena_database" ,
+				"ssm_desc" :  "Athena database " ,
+				"ssm_value" : { "Ref": "GlueDatabaseName" }
+			}
+		},
+		
+		"GlueDatabase":		{
+			"Type" : "AWS::Glue::Database",
+			"Properties" : {
+				"CatalogId" : {"Ref": "AWS::AccountId"},
+				"DatabaseInput" : 					
+				{
+					"Description" : "glue database name",						
+					"Name" : {"Ref":"GlueDatabaseName"}
+				}		
+			}
+		},
+ 
+		"CreateGetWranglerLambda": {
+			"DependsOn":["StagingBucket"], 
+			"Type": "AWS::Lambda::Function",
+			"Properties": {
+				"VpcConfig" : {
+					"SecurityGroupIds" :  [{ "Ref": "LambdaSecurityGroup"}],				
+					"SubnetIds":  [  {"Ref":  "VpcSubnetId1"  } , {"Ref":  "VpcSubnetId2"  }] 
+				},
+				"Runtime": "python3.6",
+				"Handler": "index.lambda_handler",
+				"Role" : {"Fn::GetAtt" : ["CFLambdaExecutionRole", "Arn"] },
+				"Code": {
+					"ZipFile" : {
+						"Fn::Join" : [
+							"\n", [
+							  "import json",
+							  "import boto3",
+							  "import urllib3",
+							  "import os",
+							  "http = urllib3.PoolManager()",
+							  "s3 = boto3.client('s3')",
+							  "SUCCESS = \"SUCCESS\"",
+							  "FAILED = \"FAILED\"",
+							  "def getFile(url):",
+							  "    resp = http.request('GET', url)",	
+							  "    print(resp.status)",
+							  "    return resp",
+							  " ",
+							  "def saveFile(file_name, stream, bucket_name , location):",
+							  "    full_path = \"/tmp/\"+file_name",
+							  "    file_ = open(full_path, \"wb\")",
+							  "    file_.write(stream)",
+							  "    file_.close()",
+							  "    file_size = os.path.getsize(full_path)",								  							  
+							  "    s3.upload_file(full_path, bucket_name, location  )",
+							  "    print(file_size)",
+							  "    return",
+							  " ",
+							  "def send(event, context, responseStatus, responseData, physicalResourceId=None, noEcho=False):",
+							  "    responseUrl = event['ResponseURL']",
+							  "    print(responseUrl)",
+							  "    responseBody = {}",
+							  "    responseBody['Status'] = responseStatus",
+							  "    responseBody['Reason'] = 'See the details in CloudWatch Log Stream: ' + context.log_stream_name",
+							  "    responseBody['PhysicalResourceId'] = physicalResourceId or context.log_stream_name",
+							  "    responseBody['StackId'] = event['StackId']",
+							  "    responseBody['RequestId'] = event['RequestId']",
+							  "    responseBody['LogicalResourceId'] = event['LogicalResourceId']",
+							  "    responseBody['NoEcho'] = noEcho",
+							  "    responseBody['Data'] = responseData",
+							  "    json_responseBody = json.dumps(responseBody)",
+							  "    print(\"Response body:\" + json_responseBody)",
+							  "    headers = {",
+							  "        'content-type' : '',",
+							  "        'content-length' : str(len(json_responseBody))",
+							  "    }",
+							  "    try:",
+							  "        response = http.request('PUT',",
+							  "          responseUrl,",
+                              "          body = json_responseBody,",
+							  "          headers = {'Content-Type': 'application/json'},",
+							  "          retries = False)",
+							  "        print( response.status)",
+							  "    except Exception as e:",
+							  "        print(\"send(..) failed executing requests.put(..): \" + str(e))",
+							  "    return json_responseBody ",
+							  " ",
+							  "def lambda_handler(event, context):",
+							  "    print(event)",
+							  "    response_data = {}",
+							  "    baseurl = \"https://github.com/awslabs/aws-data-wrangler/releases/download/1.9.4/\" ",
+							  "    zipFile = \"/awswrangler-layer-1.9.4-py3.6.zip\" ",
+							  "    zipurl = baseurl +zipFile"   ,
+							  "    whlFile = \"/awswrangler-1.9.4-py3-none-any.whl\"",
+							  "    whlurl = baseurl + whlFile",
+							  "    bucket_name = event['ResourceProperties']['bucket_name']",
+							  "    try : ",
+							  "        if event['RequestType'] == 'Create' or event['RequestType'] == 'Update' : ",							      
+							  "            responsezip = getFile(zipurl)",
+							  "            responsewhl = getFile(whlurl)",
+							  "            responsezip = getFile(zipurl)",
+							  "            filecontentzip = responsezip.data",
+							  "            filecontentwhl = responsewhl.data",
+							  "            saveFile(\"awswrangler-layer-1.9.4-py3.6.zip\", filecontentzip, bucket_name, \"python\" + zipFile)",
+							  "            saveFile(\"awswrangler-1.9.4-py3-none-any.whl\", filecontentwhl, bucket_name,\"python\" + whlFile)",	
+							  "            response_data['whlFile']  = \"s3://\"+ bucket_name + \"/python\" + whlFile",
+							  "            response_data['zipFile']  = \"s3://\"+ bucket_name + \"/python\" + zipFile",
+							  "            response_body = send(event, context, \"SUCCESS\", response_data)",
+							  "        else :",
+							  "            s3.delete_object(   Bucket=bucket_name,Key = \"python\" + zipFile)",
+							  "            s3.delete_object(   Bucket=bucket_name,Key = \"python\" + whlFile)",
+							  "            response_body = send(event, context, \"SUCCESS\",  response_data)",
+							  "    except Exception as inst:", 
+							  "        print(inst)  ",
+							  "        response_body = send(event, context, \"SUCCESS\", response_data)",
+							  "    return  response_body"
+							]
+						]
+					}
+				},
+				"Timeout": "30",
+				"MemorySize" : 256
+			}
+		},
+		"GetWranglerLambda": {
+			"DependsOn":["CreateGetWranglerLambda"], 
+			"Type": "Custom::GetWrangerLibrary",
+			"Properties": {
+				"ServiceToken" : {"Fn::GetAtt":["CreateGetWranglerLambda", "Arn"]},
+				"Region": { "Ref": "AWS::Region" },
+				"bucket_name" : { "Ref": "StagingBucket" }  				
+			}
+		}, 
+		"GlueJob" : {
+			"Type":"AWS::Glue::Job",
+			"Properties": {
+				"Command" :  { 
+					"Name" : "pythonshell", 
+					"PythonVersion" : "3",
+					"ScriptLocation": { "Ref":"GlueJobScriptLocation"}
+				},
+				"MaxCapacity": "1",
+				"Name":"heart_rate_job",
+				"Role":  { "Fn::GetAtt" : [ "GlueExecutionRole", "Arn" ] },
+				"Timeout": "2880",
+				"DefaultArguments":{ "--extra-py-files": { "Fn::GetAtt": ["GetWranglerLambda", "whlFile"] }},
+				"ExecutionProperty":{					"MaxConcurrentRuns" : "100"				},
+				"GlueVersion":"1.0"
+			}
+			
+		}		
+	},
+	
+	"Outputs": {
+        "StagingBucketName": {
+            "Description": "The staging bucket created is ",
+            "Value": {"Ref":  "StagingBucket"  }
+		},
+		"DataLakeBucketName": {
+            "Description": "The staging bucket created is ",
+            "Value": {"Ref":  "DataLakeBucketName"  }
+		},
+		"ProcessedBucketName": {
+            "Description": "The staging bucket created is ",
+            "Value": {"Ref":  "ProcessedBucketName"  }
+		},
+		"StagingBucketIAMPolicyName": { 
+		    "Description": "The staging bucket policy  is ",
+            "Value": {"Ref":  "StagingBucketIAMPolicy"  }
+		},
+		"SNSPubishPolicyIAMPolicyName": { 
+		    "Description": "The SNSPubishPolicy  is ",
+			"Value":  "SNSPubishPolicyIAMPolicy"             
+		},
+		"CFLambdaExecutionRoleName": {
+			"Description": "The CFLambdaExecutionRoleName  is ",
+            "Value": {"Ref":  "CFLambdaExecutionRole"  }
+		},
+		"GlueExecutionRoleName": {
+			"Description": "The GlueExecutionRole  is ",
+            "Value": {"Ref":  "GlueExecutionRole"  }
+		},
+		"EmailNotification": {
+			"Description": "The EmailNotification will be sent to  ",
+            "Value": {"Ref":  "EmailNotification"  }
+		},
+		"VpcId" : {
+			"Description": "The VPCId selected is    ",
+            "Value": {"Ref":  "VpcId"  }
+		},
+	 
+ 
+		"SubnetIdList": {
+			"Description": "The SubnetIdList   ",
+            "Value":  { "Fn::Join" : [ ":" , [{"Ref":  "VpcSubnetId1"  } , {"Ref":  "VpcSubnetId2"  } ]]}
+		},
+
+		"RouteTableLambdaFunction" : {
+			"Description": "The RouteTable lambda function is   ",
+            "Value":  {"Ref":  "GetRouteTableLambdaFunction"  }
+		},
+		"RouteTableLambdaFunctionARN" : {
+			"Description": "The RouteTable lambda function is   ",
+            "Value":  {"Fn::GetAtt":  ["GetRouteTableLambdaFunction" , "Arn" ]}
+		},
+		"RouteTableValue1": {
+			"Description": "The RT id ",
+			"Value": { "Fn::GetAtt": ["CustomResourceRTLambdaFunction1", "routetable"] }
+		},
+		"RouteTableValue2": {
+			"Description": "The RT id ",
+			"Value": { "Fn::GetAtt": ["CustomResourceRTLambdaFunction2", "routetable"] }
+		}
+	}
+}
