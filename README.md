@@ -11,7 +11,7 @@ It is recommended that you run the [HIPAA QuickStart] (https://docs.aws.amazon.c
 Data encryption provides a strong layer of security to protect data that you store within AWS services. AWS services can help you achieve ubiquitous encryption 
 for data in transit as well as data at rest.
 
-<a><img src="images/Archictecture" width="989" height="557"></a>
+<a><img src="images/Architecture.jpg" width="1760" height="860"></a>
 
 ### Ingestion 
 In the Ingestion segment  this solution cerates the following component 
