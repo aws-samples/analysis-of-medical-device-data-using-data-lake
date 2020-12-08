@@ -450,7 +450,11 @@
 							  "glue = boto3.client('glue')",							  							  
 							  "sqs = boto3.client('sqs')",
 							  "dynamodb = boto3.resource('dynamodb')",							  
-							  "patient_table = dynamodb.Table('file_metric_table_1') ",							  
+							  "patient_table = dynamodb.Table('file_metric_table_1') ",
+							  "",
+							  "# lambda will delete the msg from SQS if there is no exception", 
+							  "# lambda will not delete the msg from SQS if there is an exception",
+							  "",							  
 							  "def sendSNS(snsArn, message, subject ) : ",
 							  "    response = sns.publish(TargetArn=snsArn,  Message=json.dumps({'default': json.dumps(message)}), Subject=subject, MessageStructure='json' )",
 							  "    print(\"message : \" + json.dumps(message) + \" to ARN : \" + snsArn)",
@@ -465,11 +469,12 @@
 							  "",
 							  "def checkIfFileAlreadyProcessed (file_key):",
 							  "    try : ",
-							  "        response = patientTable.get_item(Key={'file_name': file_key},ConsistentRead=True )",
+							  "        response = patient_table.get_item(Key={'file_name': file_key},ConsistentRead=True )",
 							  "        item = response['Item']",
 							  "        print(\"Already exists \" + str(item))",
 							  "        return item['date_of_processing'] ",
 							  "    except Exception as inst:",  
+							  "        print(inst)",
 							  "        return \"not_found\"",
 							  "",
 							  "snsArn = getParameter('DL-datalake_failure_arn') ",
@@ -480,7 +485,7 @@
 							  "        payloadStr = str(payload)",
 							  "        print('body is ' + payloadStr)",
 							  "        x = json.loads(payloadStr)",
-							  "        if \"event\" in x:",
+							  "        if \"Event\" in x:",
 							  "            if x['Event'] == 's3:TestEvent':",
 							  "                message = {\"Status \" : \"Lambda received   \" , \"filename\":  x['Event'] , \"OriginalTime\" : 'now' }",
 							  "                subject = \" Test file received \" + x['Event']",
@@ -1342,11 +1347,11 @@
             "Value": {"Ref":  "StagingBucket"  }
 		},
 		"DataLakeBucketName": {
-            "Description": "The staging bucket created is ",
+            "Description": "The DataLake bucket created is ",
             "Value": {"Ref":  "DataLakeBucketName"  }
 		},
 		"ProcessedBucketName": {
-            "Description": "The staging bucket created is ",
+            "Description": "The processed bucket created is ",
             "Value": {"Ref":  "ProcessedBucketName"  }
 		},
 		"StagingBucketIAMPolicyName": { 
@@ -1376,7 +1381,7 @@
 	 
  
 		"SubnetIdList": {
-			"Description": "The SubnetIdList   ",
+			"Description": "The SubnetIds used are ",
             "Value":  { "Fn::Join" : [ ":" , [{"Ref":  "VpcSubnetId1"  } , {"Ref":  "VpcSubnetId2"  } ]]}
 		},
 

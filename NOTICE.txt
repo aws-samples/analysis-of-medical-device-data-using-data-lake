@@ -1,2 +1,0 @@
-[Analysis of Medical Device Data using Data Lake]
-Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved. 

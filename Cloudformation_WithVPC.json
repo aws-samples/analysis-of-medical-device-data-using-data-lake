@@ -450,7 +450,11 @@
 							  "glue = boto3.client('glue')",							  							  
 							  "sqs = boto3.client('sqs')",
 							  "dynamodb = boto3.resource('dynamodb')",							  
-							  "patient_table = dynamodb.Table('file_metric_table_1') ",							  
+							  "patient_table = dynamodb.Table('file_metric_table_1') ",
+							  "",
+							  "# lambda will delete the msg from SQS if there is no exception", 
+							  "# lambda will not delete the msg from SQS if there is an exception and its retried after the timeout visibility has expired",
+							  "",
 							  "def sendSNS(snsArn, message, subject ) : ",
 							  "    response = sns.publish(TargetArn=snsArn,  Message=json.dumps({'default': json.dumps(message)}), Subject=subject, MessageStructure='json' )",
 							  "    print(\"message : \" + json.dumps(message) + \" to ARN : \" + snsArn)",
@@ -465,11 +469,12 @@
 							  "",
 							  "def checkIfFileAlreadyProcessed (file_key):",
 							  "    try : ",
-							  "        response = patientTable.get_item(Key={'file_name': file_key},ConsistentRead=True )",
+							  "        response = patient_table.get_item(Key={'file_name': file_key},ConsistentRead=True )",
 							  "        item = response['Item']",
 							  "        print(\"Already exists \" + str(item))",
 							  "        return item['date_of_processing'] ",
 							  "    except Exception as inst:",  
+							  "        print(inst)",
 							  "        return \"not_found\"",
 							  "",
 							  "snsArn = getParameter('DL-datalake_failure_arn') ",
@@ -480,7 +485,7 @@
 							  "        payloadStr = str(payload)",
 							  "        print('body is ' + payloadStr)",
 							  "        x = json.loads(payloadStr)",
-							  "        if \"event\" in x:",
+							  "        if \"Event\" in x:",
 							  "            if x['Event'] == 's3:TestEvent':",
 							  "                message = {\"Status \" : \"Lambda received   \" , \"filename\":  x['Event'] , \"OriginalTime\" : 'now' }",
 							  "                subject = \" Test file received \" + x['Event']",
@@ -648,28 +653,9 @@
 				"vpc_id" : {"Ref" : "VpcId"}
 			}
 		},
-		"S3VPCEndpoint" : {		
+		"S3VPCEndpoint" : {
 			"Type" : "AWS::EC2::VPCEndpoint",
-			"DependsOn":["InstanceSecurityGroup"], 
-			"Properties" : {
-				"PolicyDocument" : {						
-					"Version":"2012-10-17",				
-					"Statement": [{							
-						"Action": "*",
-						"Effect": "Allow",
-						"Principal": "*",
-						"Resource":  "*" 
-					}]
-				},							
-				"ServiceName" : { "Fn::Sub": "com.amazonaws.${AWS::Region}.s3" },
-				"RouteTableIds":   [{"Ref":  "RouteTableId1"  } , { "Ref": "RouteTableId2"}] ,				
-				"VpcEndpointType" : "Gateway",
-				"VpcId" : {"Ref" : "VpcId"}
-			}
-		},	
-		"SQSVPCEndpoint" : {
-			"Type" : "AWS::EC2::VPCEndpoint",
-			"DependsOn":["InstanceSecurityGroup"],
+			"DependsOn":["CustomResourceRTLambdaFunction1" ],
 			"Properties" : {
 				"PolicyDocument" : {
 					"Version":"2012-10-17",
@@ -677,7 +663,41 @@
 						"Action": "*",
 						"Effect": "Allow",
 						"Principal": "*",
-						"Resource":  "*"
+						"Resource":  [	{"Fn::GetAtt":["StagingBucket", "Arn"]} , {"Fn::GetAtt":["ProcessedBucket", "Arn"]} , {"Fn::GetAtt":["DataLakeBucket", "Arn"]}, 
+ { "Fn::Join":[ "", [{ "Fn::GetAtt" : [ "StagingBucket","Arn" ]},"/*" ] ] }, 
+ { "Fn::Join":[ "", [{ "Fn::GetAtt" : [ "ProcessedBucket","Arn" ]},"/*" ] ] } , 
+ { "Fn::Join":[ "", [{ "Fn::GetAtt" : [ "DataLakeBucket","Arn" ]},"/*" ] ] } , 
+ { "Fn::Join":[ "", [{ "Fn::GetAtt" : [ "DataLakeBucket","Arn" ]},"/*" ] ] } ,    "arn:aws:s3:::aws-glue*/*""     
+ ]
+					}]
+				},
+				"ServiceName" : { "Fn::Sub": "com.amazonaws.${AWS::Region}.s3" },
+				"RouteTableIds" : [  {"Fn::GetAtt": ["CustomResourceRTLambdaFunction1", "routetable"]} ],
+				"VpcEndpointType" : "Gateway",
+				"VpcId" : {"Ref" : "VpcId"}
+			}
+		},
+		 
+		"SQSVPCEndpoint" : {
+			"Type" : "AWS::EC2::VPCEndpoint",
+			"DependsOn":["InstanceSecurityGroup", "SQSTriggerQueue", "GlueExecutionRole","LambdaProcessorExecutionRole" ],
+			"Properties" : {
+				"PolicyDocument" : {
+					"Version":"2012-10-17",
+					"Statement": [{
+						"Action": "*",
+						"Effect": "Allow",
+						"Principal": {
+							"Service": [
+								"lambda.amazonaws.com",
+								"glue.amazonaws.com"
+							],
+							"AWS": [ 
+								{"Fn::GetAtt" : ["LambdaProcessorExecutionRole", "Arn"] },
+								{"Fn::GetAtt" : ["GlueExecutionRole", "Arn"] }
+							]
+						},
+						"Resource":   { "Fn::GetAtt" : ["SQSTriggerQueue" , "Arn"]}
 					}]
 				},
 				"PrivateDnsEnabled" : "True",
@@ -695,10 +715,19 @@
 				"PolicyDocument" : {
 					"Version":"2012-10-17",
 					"Statement": [{
-						"Action": "*",
+						"Action": "sns:Publish",											
 						"Effect": "Allow",
-						"Principal": "*",
-						"Resource":  "*"
+						"Principal": {
+							"Service": [
+								"lambda.amazonaws.com",
+								"glue.amazonaws.com"
+							],
+							"AWS": [ 
+								{"Fn::GetAtt" : ["LambdaProcessorExecutionRole", "Arn"] },
+								{"Fn::GetAtt" : ["GlueExecutionRole", "Arn"] }
+							]						
+						},
+						"Resource": { "Ref" : "ErrorSNSTopic" }
 					}]
 				},
 				"PrivateDnsEnabled" : "True",
@@ -747,6 +776,28 @@
 			"Type" : "AWS::EC2::VPCEndpoint",
 			"DependsOn":["AthenaVPCEndpoint"],
 			"Properties" : {
+				"PolicyDocument" : {
+					"Version":"2012-10-17",
+					"Statement": [{
+						"Action": : [
+							"ssm:GetParametersByPath",
+							"ssm:GetParameters",
+							"ssm:GetParameter"
+						],											
+						"Effect": "Allow",
+						"Principal": {
+							"Service": [
+								"lambda.amazonaws.com",
+								"glue.amazonaws.com"
+							],
+							"AWS": [ 
+								{"Fn::GetAtt" : ["LambdaProcessorExecutionRole", "Arn"] },
+								{"Fn::GetAtt" : ["GlueExecutionRole", "Arn"] }
+							]						
+						},
+					   "Resource": "arn:aws:ssm:*:*:parameter/DL-*",
+					}]
+				},
 				"PrivateDnsEnabled" : "True",
 				"SecurityGroupIds" :  [{ "Ref": "InstanceSecurityGroup"}],
 				"ServiceName" : { "Fn::Sub": "com.amazonaws.${AWS::Region}.ssm" },
@@ -755,25 +806,7 @@
 				"VpcId" : {"Ref" : "VpcId"}
 			}
 		},
-        "S3VPCEndpoint" : {
-			"Type" : "AWS::EC2::VPCEndpoint",
-			"DependsOn":["CustomResourceRTLambdaFunction1" ],
-			"Properties" : {
-				"PolicyDocument" : {
-					"Version":"2012-10-17",
-					"Statement": [{
-						"Action": "*",
-						"Effect": "Allow",
-						"Principal": "*",
-						"Resource":  "*"
-					}]
-				},
-				"ServiceName" : { "Fn::Sub": "com.amazonaws.${AWS::Region}.s3" },
-				"RouteTableIds" : [  {"Fn::GetAtt": ["CustomResourceRTLambdaFunction1", "routetable"]} ],
-				"VpcEndpointType" : "Gateway",
-				"VpcId" : {"Ref" : "VpcId"}
-			}
-		},
+ 
 		"DynamoDBVPCEndpoint" : {
 			"Type" : "AWS::EC2::VPCEndpoint",
 			"DependsOn":["CustomResourceRTLambdaFunction1" ],
@@ -781,10 +814,15 @@
 				"PolicyDocument" : {
 					"Version":"2012-10-17",
 					"Statement": [{
-						"Action": "*",
+						"Action": [  "dynamodb:Batch*",
+							"dynamodb:Delete*",
+							"dynamodb:GetItem",
+							"dynamodb:PutItem",
+							"dynamodb:Update*"
+						],
 						"Effect": "Allow",
 						"Principal": "*",
-						"Resource":  "*"
+						"Resource": "arn:aws:dynamodb:*:*:table/file_metric_table_1"
 					}]
 				},
 				"ServiceName" : { "Fn::Sub": "com.amazonaws.${AWS::Region}.dynamodb" },
@@ -1482,11 +1520,11 @@
             "Value": {"Ref":  "StagingBucket"  }
 		},
 		"DataLakeBucketName": {
-            "Description": "The staging bucket created is ",
+            "Description": "The datalake bucket created is ",
             "Value": {"Ref":  "DataLakeBucketName"  }
 		},
 		"ProcessedBucketName": {
-            "Description": "The staging bucket created is ",
+            "Description": "The processed bucket created is ",
             "Value": {"Ref":  "ProcessedBucketName"  }
 		},
 		"StagingBucketIAMPolicyName": { 
@@ -1528,7 +1566,7 @@
             }
 		},
 		"SubnetIdList": {
-			"Description": "The SubnetIdList   ",
+			"Description": "The Subnets where VPC Endpoints are created are    ",
             "Value":  { "Fn::Join" : [ ":" , [{"Ref":  "VpcSubnetId1"  } , {"Ref":  "VpcSubnetId2"  } ]]}
 		},
 
