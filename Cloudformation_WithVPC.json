@@ -667,7 +667,7 @@
  { "Fn::Join":[ "", [{ "Fn::GetAtt" : [ "StagingBucket","Arn" ]},"/*" ] ] }, 
  { "Fn::Join":[ "", [{ "Fn::GetAtt" : [ "ProcessedBucket","Arn" ]},"/*" ] ] } , 
  { "Fn::Join":[ "", [{ "Fn::GetAtt" : [ "DataLakeBucket","Arn" ]},"/*" ] ] } , 
- { "Fn::Join":[ "", [{ "Fn::GetAtt" : [ "DataLakeBucket","Arn" ]},"/*" ] ] } ,    "arn:aws:s3:::aws-glue*/*""     
+ { "Fn::Join":[ "", [{ "Fn::GetAtt" : [ "DataLakeBucket","Arn" ]},"/*" ] ] } ,    "arn:aws:s3:::aws-glue*/*"
  ]
 					}]
 				},
@@ -779,7 +779,7 @@
 				"PolicyDocument" : {
 					"Version":"2012-10-17",
 					"Statement": [{
-						"Action": : [
+						"Action": [
 							"ssm:GetParametersByPath",
 							"ssm:GetParameters",
 							"ssm:GetParameter"
@@ -795,7 +795,7 @@
 								{"Fn::GetAtt" : ["GlueExecutionRole", "Arn"] }
 							]						
 						},
-					   "Resource": "arn:aws:ssm:*:*:parameter/DL-*",
+					   "Resource": "arn:aws:ssm:*:*:parameter/DL-*"
 					}]
 				},
 				"PrivateDnsEnabled" : "True",
