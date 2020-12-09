@@ -667,7 +667,9 @@
  { "Fn::Join":[ "", [{ "Fn::GetAtt" : [ "StagingBucket","Arn" ]},"/*" ] ] }, 
  { "Fn::Join":[ "", [{ "Fn::GetAtt" : [ "ProcessedBucket","Arn" ]},"/*" ] ] } , 
  { "Fn::Join":[ "", [{ "Fn::GetAtt" : [ "DataLakeBucket","Arn" ]},"/*" ] ] } , 
- { "Fn::Join":[ "", [{ "Fn::GetAtt" : [ "DataLakeBucket","Arn" ]},"/*" ] ] } ,    "arn:aws:s3:::aws-glue*/*"
+ { "Fn::Join":[ "", [{ "Fn::GetAtt" : [ "DataLakeBucket","Arn" ]},"/*" ] ] } ,   
+ "arn:aws:s3:::aws-glue*", "arn:aws:s3:::aws-glue*/*", 
+ "arn:aws:s3:::cloudformation-custom-resource*", "arn:aws:s3:::cloudformation-custom-resource*/*"
  ]
 					}]
 				},
