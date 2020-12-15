@@ -1,20 +1,7 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "template",
-    "Parameters":{		
-		"VpcId" : {		  
-		  "Type" : "AWS::EC2::VPC::Id",
-		  "Description" : "VpcId of your existing Virtual Private Cloud (VPC)"
-		},
-		"VpcSubnetId1" : {
-			"Type" : "AWS::EC2::Subnet::Id",
-			"Description" : "Subnet #1 of your existing Virtual Private Cloud subnet (VPC) with NAT"
-		},
-		"VpcSubnetId2" : {
-		  "Type" : "AWS::EC2::Subnet::Id",
-		  "Description" : "Subnet #2 of your existing Virtual Private Cloud subnet (VPC) with NAT"
-		},
-	 
+    "Parameters":{				 
 		"VersionId" : {
 		  "Type" : "String",
 		  "Description" : "Versionid "	,
@@ -125,46 +112,7 @@
 			"QueueName" : { "Ref" : "SQStriggerqueueName" }, 
 			"VisibilityTimeout" : "300"
 			}			
-		},
-		"LambdaSecurityGroup" : {			 
-		    "Type" : "AWS::EC2::SecurityGroup",
-		    "Properties" : {
-			  "GroupDescription" : "Allow Lambda to run in an VPC",	
-			  "VpcId" : {"Ref" : "VpcId"},		  
-			  "SecurityGroupEgress" : [{
-				 "IpProtocol" : "tcp",
-				 "FromPort" : 0,
-				 "ToPort" : 65535,
-				 "CidrIp" : "0.0.0.0/0"
-			  }]
-		   }
-		},
-		"InstanceSecurityGroup" : {
-			"DependsOn":["CustomResourceRTLambdaFunction1", "CustomResourceRTLambdaFunction1" ],
-		    "Type" : "AWS::EC2::SecurityGroup",
-		    "Properties" : {
-			  "GroupDescription" : "Allow access to VPC Endpoint",
-			  "VpcId" : {"Ref" : "VpcId"},
-			  "SecurityGroupIngress" : [{
-				 "IpProtocol" : "tcp",
-				 "FromPort" : 0,
-				 "ToPort" : 65535,
-				 "CidrIp" : { "Fn::GetAtt":["CustomResourceRTLambdaFunction1", "cidrblock"]}
-			  },
-			  {
-				 "IpProtocol" : "tcp",
-				 "FromPort" : 0,
-				 "ToPort" : 65535,
-				 "CidrIp" : { "Fn::GetAtt":["CustomResourceRTLambdaFunction2", "cidrblock"]}
-			  }],
-			  "SecurityGroupEgress" : [{
-				 "IpProtocol" : "tcp",
-				 "FromPort" : 0,
-				 "ToPort" : 65535,
-				 "CidrIp" : "0.0.0.0/0"
-			  }]
-		   }
-		},
+		},	 
 		"LambdaIAMPolicy": {
 			"Type": "AWS::IAM::Policy",
 			"Properties": {
@@ -339,15 +287,10 @@
 				}]
 			}
 		},
- 
- 
 		"CreateSSMParamLambdaFunction": {
 			"Type": "AWS::Lambda::Function",
 			"Properties": {
-				"VpcConfig" : {
-					"SecurityGroupIds" :  [{ "Ref": "LambdaSecurityGroup"}],				
-					"SubnetIds":  [  {"Ref":  "VpcSubnetId1"  } , {"Ref":  "VpcSubnetId2"  }] 
-				},
+				 
 				"Runtime": "python3.6",
 				"Handler": "index.lambda_handler",
 				"Role" : {"Fn::GetAtt" : ["CFLambdaExecutionRole", "Arn"] },
@@ -429,10 +372,7 @@
 		"CreateSQSTriggerLambdaFunction": {
 			"Type": "AWS::Lambda::Function",
 			"Properties": {
-				"VpcConfig" : {
-					"SecurityGroupIds" :  [{ "Ref": "LambdaSecurityGroup"}],				
-					"SubnetIds":  [  {"Ref":  "VpcSubnetId1"  } , {"Ref":  "VpcSubnetId2"  }] 
-				},
+				 
 				"FunctionName":"SQSTriggerLambdaFunction",
 				"Runtime": "python3.6",
 				"Handler": "index.lambda_handler",
@@ -538,125 +478,6 @@
 				"FunctionName": {"Fn::GetAtt" : ["CreateSQSTriggerLambdaFunction", "Arn"] } 
 			}
 		},
-		"GetRouteTableLambdaFunction": {
-			"Type": "AWS::Lambda::Function",
-			"DependsOn":["LambdaIAMPolicy"],
-			"Properties": {
-				"VpcConfig" : {
-					"SecurityGroupIds" :  [{ "Ref": "LambdaSecurityGroup"}],				
-					"SubnetIds":  [  {"Ref":  "VpcSubnetId1"  } , {"Ref":  "VpcSubnetId2"  }] 
-				},
-				"Runtime": "python3.6",
-				"Handler": "index.lambda_handler",
-				"Role" : {"Fn::GetAtt" : ["CFLambdaExecutionRole", "Arn"] },
-				"Code": {
-					"ZipFile" : {
-						"Fn::Join" : [
-							"\n", [
-							  "import json",
-							  "import boto3",
-							  "import urllib3",
-							  "import signal",
-							  "http = urllib3.PoolManager()",
-							  "ec2 = boto3.client('ec2')",
-							  "SUCCESS = \"SUCCESS\"",
-							  "FAILED = \"FAILED\"",
-							  "def send(event, context, responseStatus, responseData, physicalResourceId=None, noEcho=False):",
-							  "    responseUrl = event['ResponseURL']",
-							  "    print(responseUrl)",
-							  "    responseBody = {}",
-							  "    responseBody['Status'] = responseStatus",
-							  "    responseBody['Reason'] = 'See the details in CloudWatch Log Stream: ' + context.log_stream_name",
-							  "    responseBody['PhysicalResourceId'] = physicalResourceId or context.log_stream_name",
-							  "    responseBody['StackId'] = event['StackId']",
-							  "    responseBody['RequestId'] = event['RequestId']",
-							  "    responseBody['LogicalResourceId'] = event['LogicalResourceId']",
-							  "    responseBody['NoEcho'] = noEcho",
-							  "    responseBody['Data'] = responseData",
-							  "    json_responseBody = json.dumps(responseBody)",
-							  "    print(\"Response body:\" + json_responseBody)",
-							  "    headers = {",
-							  "        'content-type' : '',",
-							  "        'content-length' : str(len(json_responseBody))",
-							  "    }",
-							  "    try:",
-							  "        response = http.request('PUT',",
-							  "          responseUrl,",
-                              "          body = json_responseBody,",
-							  "          headers = {'Content-Type': 'application/json'},",
-							  "          retries = False)",
-							  "        print( response.status)",
-							  "    except Exception as e:",
-							  "        print(\"send(..) failed executing requests.put(..): \" + str(e))",
-							  "    return json_responseBody ",
-							  "",
-							  "def timeout_handler(_signal, _frame):",
-							  "    print(\"about to timeout\")",
-							  "    return",
-							  "",
-							  "def lambda_handler(event, context):",
-							  "    signal.alarm(int(context.get_remaining_time_in_millis() / 1000) - 1)",							  
-							  "    print(event)",
-							  "    response_data = {}",
-							  "    subnet_id = event['ResourceProperties']['subnet_id']",
-							  "    vpc_id = event['ResourceProperties']['vpc_id']",
-							  "    print(\"the vpcId \"  + vpc_id)",
-							  "    print(\"the subnet_id \"  + subnet_id)",
-							  "    if event['RequestType'] == 'Create' or event['RequestType'] == 'Update' : ",
-							  "        response1 = ec2.describe_route_tables( Filters=[ {  'Name': 'association.subnet-id','Values': [subnet_id] } ])",
-							  "        rt = {}",
-							  "        if len(response1['RouteTables']) > 0 : ",
-							  "            rt = response1['RouteTables'][0]['RouteTableId']",
-							  "            print(response1)",
-							  "            print(\"@@@@\")",							  							  
-							  "        else:",
-							  "            response1 = ec2.describe_route_tables( Filters=[   {  'Name'  : 'vpc-id', 'Values': [vpc_id ] } , ",
-							  "               {'Name':'association.main', 'Values': ['true']} ])",
-							  "            print(response1)",
-							  "            print(\"####\")",							  
-							  "            rt = response1['RouteTables'][0]['RouteTableId']",
-							  "        response2= ec2.describe_subnets(SubnetIds=[subnet_id])",
-							  "        cidrblock = response2['Subnets'][0]['CidrBlock']",
-							  "        response_data['routetable'] = rt",
-							  "        response_data['cidrblock'] = cidrblock",
-							  "        response_body = send(event, context, \"SUCCESS\", response_data)",
-							  "    else :",
-							  "        response_data['routetable'] = \"ok\"",
-							  "        response_data['cidrblock'] = \"ok\"",
-							  "        response_body = send(event, context, \"SUCCESS\",  response_data)",
-							  "    return  response_body",
-							  "signal.signal(signal.SIGALRM, timeout_handler)"
-							]
-						]
-					}
-				},
-				"Timeout": "30"
-			}
-		},
-		"CustomResourceRTLambdaFunction1": {
-			"DependsOn":["GetRouteTableLambdaFunction", "LambdaIAMPolicy"],
-			"Type": "Custom::GetRouteTable",
-			"Properties": {
-				"ServiceToken" : {"Fn::GetAtt":["GetRouteTableLambdaFunction", "Arn"]},
-				"Region": { "Ref": "AWS::Region" },
-				"subnet_id" : { "Ref":  "VpcSubnetId1"  },
-				 "vpc_id" : {"Ref" : "VpcId"}
-			}
-		},
-		"CustomResourceRTLambdaFunction2": {
-			"DependsOn":["GetRouteTableLambdaFunction", "LambdaIAMPolicy"],
-			"Type": "Custom::GetRouteTable",
-			"Properties": {
-				"ServiceToken" : {"Fn::GetAtt":["GetRouteTableLambdaFunction", "Arn"]},
-				"Region": { "Ref": "AWS::Region" },
-				"subnet_id" : { "Ref":  "VpcSubnetId2"  },
-				"vpc_id" : {"Ref" : "VpcId"}
-			}
-		},
-
- 
- 
-	 
 	 
 		"SQSPublishPolicy": {
 			"Type": "AWS::SQS::QueuePolicy",
@@ -1212,10 +1033,7 @@
 			"DependsOn":["StagingBucket"], 
 			"Type": "AWS::Lambda::Function",
 			"Properties": {
-				"VpcConfig" : {
-					"SecurityGroupIds" :  [{ "Ref": "LambdaSecurityGroup"}],				
-					"SubnetIds":  [  {"Ref":  "VpcSubnetId1"  } , {"Ref":  "VpcSubnetId2"  }] 
-				},
+				 
 				"Runtime": "python3.6",
 				"Handler": "index.lambda_handler",
 				"Role" : {"Fn::GetAtt" : ["CFLambdaExecutionRole", "Arn"] },
@@ -1373,33 +1191,6 @@
 		"EmailNotification": {
 			"Description": "The EmailNotification will be sent to  ",
             "Value": {"Ref":  "EmailNotification"  }
-		},
-		"VpcId" : {
-			"Description": "The VPCId selected is    ",
-            "Value": {"Ref":  "VpcId"  }
-		},
-	 
- 
-		"SubnetIdList": {
-			"Description": "The SubnetIds used are ",
-            "Value":  { "Fn::Join" : [ ":" , [{"Ref":  "VpcSubnetId1"  } , {"Ref":  "VpcSubnetId2"  } ]]}
-		},
-
-		"RouteTableLambdaFunction" : {
-			"Description": "The RouteTable lambda function is   ",
-            "Value":  {"Ref":  "GetRouteTableLambdaFunction"  }
-		},
-		"RouteTableLambdaFunctionARN" : {
-			"Description": "The RouteTable lambda function is   ",
-            "Value":  {"Fn::GetAtt":  ["GetRouteTableLambdaFunction" , "Arn" ]}
-		},
-		"RouteTableValue1": {
-			"Description": "The RT id ",
-			"Value": { "Fn::GetAtt": ["CustomResourceRTLambdaFunction1", "routetable"] }
-		},
-		"RouteTableValue2": {
-			"Description": "The RT id ",
-			"Value": { "Fn::GetAtt": ["CustomResourceRTLambdaFunction2", "routetable"] }
-		}
+		}		 
 	}
 }
