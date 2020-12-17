@@ -74,7 +74,7 @@
         },
 		"StagingFolderPrefix": {
             "Description": "Staging S3 Folder Prefix ",
-			"Default":"staging/input",
+			"Default":"staging/input/",
             "Type": "String",
             "MinLength": "1",
             "MaxLength": "64",
@@ -1468,6 +1468,8 @@
 							  "            filecontentwhl = responsewhl.data",
 							  "            saveFile(\"awswrangler-layer-1.9.4-py3.6.zip\", filecontentzip, bucket_name, \"python\" + zipFile)",
 							  "            saveFile(\"awswrangler-1.9.4-py3-none-any.whl\", filecontentwhl, bucket_name,\"python\" + whlFile)",	
+							  "            stagingFolderPrefix = os.environ['stagingFolderPrefix']",
+							  "            s3.put_object( Body=b'', Bucket=bucket_name, Key=stagingFolderPrefix)",
 							  "            response_data['whlFile']  = \"s3://\"+ bucket_name + \"/python\" + whlFile",
 							  "            response_data['zipFile']  = \"s3://\"+ bucket_name + \"/python\" + zipFile",
 							  "            response_body = send(event, context, \"SUCCESS\", response_data)",
@@ -1481,6 +1483,13 @@
 							  "    return  response_body"
 							]
 						]
+					}
+				},
+				"Environment": {
+					"Variables": {
+						"stagingFolderPrefix": {
+							"Ref": "StagingFolderPrefix"
+						}
 					}
 				},
 				"Timeout": "30",

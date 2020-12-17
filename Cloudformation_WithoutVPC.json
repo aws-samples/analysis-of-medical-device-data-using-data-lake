@@ -61,12 +61,12 @@
         },
 		"StagingFolderPrefix": {
             "Description": "Staging S3 Folder Prefix ",
-			"Default":"staging/input",
+			"Default":"staging/input/",
             "Type": "String",
             "MinLength": "1",
             "MaxLength": "64",
-            "AllowedPattern":  "[a-zA-Z0-9._/]*[a-z0-9A-Z]",
-            "ConstraintDescription": "Contain only  alphanumeric characters ,  period (.) , forward slash (/)  and underscore (_) ."
+            "AllowedPattern":  "[a-zA-Z0-9._/]*[a-z0-9A-Z]/",
+            "ConstraintDescription": "Contain only  alphanumeric characters ,  period (.) , forward slash (/)  and underscore (_) . It must end with / at the end ."
         },
 		"DataLakeS3FolderPrefix": {
             "Description": "DataLake Target S3 Folder Prefix ",
@@ -1108,7 +1108,8 @@
 							  "            responsewhl = getFile(whlurl)",
 							  "            responsezip = getFile(zipurl)",
 							  "            filecontentzip = responsezip.data",
-							  "            filecontentwhl = responsewhl.data",
+							  "            filecontentwhl = responsewhl.data",			
+							  "            response = s3.put_object( Body=b'', Bucket=bucket_name, Key='" , {"Ref":"StagingFolderPrefix"}, "')",
 							  "            saveFile(\"awswrangler-layer-1.9.4-py3.6.zip\", filecontentzip, bucket_name, \"python\" + zipFile)",
 							  "            saveFile(\"awswrangler-1.9.4-py3-none-any.whl\", filecontentwhl, bucket_name,\"python\" + whlFile)",	
 							  "            response_data['whlFile']  = \"s3://\"+ bucket_name + \"/python\" + whlFile",
