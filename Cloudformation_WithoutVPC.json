@@ -931,87 +931,150 @@
 				"TopicArn" : { "Ref" : "ErrorSNSTopic" }
 			}
 		},
+		"DataLakeTargetBucketSSMParameter": {
+			"Type": "AWS::SSM::Parameter",
+			"Properties": {
+				"Description" : "AWS Systems Manager Parameter Store parameter for DL-datalake_target_bucket",
+				"Name" :  "DL-datalake_target_bucket",
+				"Type" : "String",
+				"Value" : "DL-datalake_target_bucket"
+			}
+		},
 		"DataLakeTargetBucketSSM": {
-			"DependsOn":["CreateSSMParamLambdaFunction"],
+			"DependsOn":["CreateSSMParamLambdaFunction", "DataLakeTargetBucketSSMParameter"],
 			"Type": "Custom::PutParameter",
 			"Properties": {
 				"ServiceToken" : {"Fn::GetAtt":["CreateSSMParamLambdaFunction", "Arn"]},
 				"Region": { "Ref": "AWS::Region" },
 				"key_id" : { "Ref": "SSMKmsKey"   },
-				"ssm_name" :  "DL-datalake_target_bucket" ,
+				"ssm_name" :  {"Ref": "DataLakeTargetBucketSSMParameter" } ,
 				"ssm_desc" :  "datalake_target_bucket name  saved in SSM " ,
 				"ssm_value" : { "Ref": "DataLakeBucketName" }
 			}
 		},
+		"DataLakeFailureArnSSMParameter": {
+			"Type": "AWS::SSM::Parameter",
+			"Properties": {
+				"Description" : "AWS Systems Manager Parameter Store parameter for DL-datalake_failure_arn",
+				"Name" :  "DL-datalake_failure_arn",
+				"Type" : "String",
+				"Value" : "DL-datalake_failure_arn"
+			}
+		},
 		"DataLakeFailureArnSSM": {
-			"DependsOn":["CreateSSMParamLambdaFunction"], 
+			"DependsOn":["CreateSSMParamLambdaFunction", "DataLakeFailureArnSSMParameter"], 
 			"Type": "Custom::PutParameter",
 			"Properties": {
 				"ServiceToken" : {"Fn::GetAtt":["CreateSSMParamLambdaFunction", "Arn"]},
 				"Region": { "Ref": "AWS::Region" },
 				"key_id" : { "Ref": "SSMKmsKey"   },
-				"ssm_name" :  "DL-datalake_failure_arn" ,
+				"ssm_name" :  { "Ref": "DataLakeFailureArnSSMParameter" } ,
 				"ssm_desc" :  "datalake_failure arn  saved in SSM " ,
 				"ssm_value" : { "Ref": "ErrorSNSTopic" }
 			}
 		},
+		"DataLakeFolderPrefixSSMParameter": {
+			"Type": "AWS::SSM::Parameter",
+			"Properties": {
+				"Description" : "AWS Systems Manager Parameter Store parameter for DL-datalake_bucket_prefix",
+				"Name" :  "DL-datalake_bucket_prefix",
+				"Type" : "String",
+				"Value" : "DL-datalake_bucket_prefix"
+			}
+		},
 		"DataLakeFolderPrefixSSM": {
-			"DependsOn":["CreateSSMParamLambdaFunction"], 
+			"DependsOn":["CreateSSMParamLambdaFunction", "DataLakeFolderPrefixSSMParameter"], 
 			"Type": "Custom::PutParameter",
 			"Properties": {
 				"ServiceToken" : {"Fn::GetAtt":["CreateSSMParamLambdaFunction", "Arn"]},
 				"Region": { "Ref": "AWS::Region" },
 				"key_id" : { "Ref": "SSMKmsKey"   },
-				"ssm_name" :  "DL-datalake_bucket_prefix" ,
+				"ssm_name" :  { "Ref": "DataLakeFolderPrefixSSMParameter" } ,
 				"ssm_desc" :  "datalake_folder location" ,
 				"ssm_value" : { "Ref": "DataLakeS3FolderPrefix" }
 			}
 		},
+		"SQStriggerqueueNameSSMParameter": {
+			"Type": "AWS::SSM::Parameter",
+			"Properties": {
+				"Description" : "AWS Systems Manager Parameter Store parameter for DL-staging_trigger_queue",
+				"Name" :  "DL-staging_trigger_queue",
+				"Type" : "String",
+				"Value" : "DL-staging_trigger_queue"
+			}
+		},
 		"SQStriggerqueueNameSSM": {
-			"DependsOn":["CreateSSMParamLambdaFunction"], 
+			"DependsOn":["CreateSSMParamLambdaFunction", "SQStriggerqueueNameSSMParameter"], 
 			"Type": "Custom::PutParameter",
 			"Properties": {
 				"ServiceToken" : {"Fn::GetAtt":["CreateSSMParamLambdaFunction", "Arn"]},
 				"Region": { "Ref": "AWS::Region" },
 				"key_id" : { "Ref": "SSMKmsKey"   },
-				"ssm_name" :  "DL-staging_trigger_queue" ,
+				"ssm_name" :  { "Ref": "SQStriggerqueueNameSSMParameter" } ,
 				"ssm_desc" :  "staging_trigger_queue" ,
 				"ssm_value" : { "Ref": "SQSTriggerQueue" }
 			}
 		},
+		"ProcessedBucketNameSSMParameter": {
+			"Type": "AWS::SSM::Parameter",
+			"Properties": {
+				"Description" : "AWS Systems Manager Parameter Store parameter for DL-processed_bucket",
+				"Name" :  "DL-processed_bucket",
+				"Type" : "String",
+				"Value" : "DL-processed_bucket"
+			}
+		},
 		"ProcessedBucketNameSSM": {
-			"DependsOn":["CreateSSMParamLambdaFunction"], 
+			"DependsOn":["CreateSSMParamLambdaFunction", "ProcessedBucketNameSSMParameter"], 
 			"Type": "Custom::PutParameter",
 			"Properties": {
 				"ServiceToken" : {"Fn::GetAtt":["CreateSSMParamLambdaFunction", "Arn"]},
 				"Region": { "Ref": "AWS::Region" },
 				"key_id" : { "Ref": "SSMKmsKey"   },
-				"ssm_name" :  "DL-processed_bucket" ,
+				"ssm_name" :  { "Ref": "ProcessedBucketNameSSMParameter" } ,
 				"ssm_desc" :  "bucket to where the files are moved   from staging" ,
 				"ssm_value" : { "Ref": "ProcessedBucketName" }
 			}
 		},
+		"ProcessedBucketFolderPrefixSSMParameter": {
+			"Type": "AWS::SSM::Parameter",
+			"Properties": {
+				"Description" : "AWS Systems Manager Parameter Store parameter for DL-processed_location_prefix",
+				"Name" :  "DL-processed_location_prefix",
+				"Type" : "String",
+				"Value" : "DL-processed_location_prefix"
+			}
+		},
 		"ProcessedBucketFolderPrefixSSM": {
-			"DependsOn":["CreateSSMParamLambdaFunction"], 
+			"DependsOn":["CreateSSMParamLambdaFunction", "ProcessedBucketFolderPrefixSSMParameter"], 
 			"Type": "Custom::PutParameter",
 			"Properties": {
 				"ServiceToken" : {"Fn::GetAtt":["CreateSSMParamLambdaFunction", "Arn"]},
 				"Region": { "Ref": "AWS::Region" },
 				"key_id" : { "Ref": "SSMKmsKey"   },
-				"ssm_name" :  "DL-processed_location_prefix" ,
+				"ssm_name" :  { "Ref": "ProcessedBucketFolderPrefixSSMParameter" } ,
 				"ssm_desc" :  "bucket to where the files are moved   from staging" ,
 				"ssm_value" : { "Ref": "ProcessedBucketFolderPrefix" }
 			}
 		},
+		"DataLakeAthenaDatabaseSSMParameter": {
+			"Type": "AWS::SSM::Parameter",
+			"Properties": {
+				"Description" : "AWS Systems Manager Parameter Store parameter for DL-datalake_athena_database",
+				"Name" :  "DL-datalake_athena_database",
+				"Type" : "String",
+				"Value" : "DL-datalake_athena_database"
+			}
+		},
 		"DataLakeAthenaDatabaseSSM": {
 		
-			"DependsOn":["CreateSSMParamLambdaFunction", "GlueDatabase"], 
+			"DependsOn":["CreateSSMParamLambdaFunction", "GlueDatabase", "DataLakeAthenaDatabaseSSMParameter"], 
 			"Type": "Custom::PutParameter",
 			"Properties": {
 				"ServiceToken" : {"Fn::GetAtt":["CreateSSMParamLambdaFunction", "Arn"]},
 				"Region": { "Ref": "AWS::Region" },
 				"key_id" : { "Ref": "SSMKmsKey"   },
-				"ssm_name" :  "DL-datalake_athena_database" ,
+				"ssm_name" :  { "Ref": "DataLakeAthenaDatabaseSSMParameter" } ,
 				"ssm_desc" :  "Athena database " ,
 				"ssm_value" : { "Ref": "GlueDatabaseName" }
 			}
@@ -1181,6 +1244,14 @@
 		"ProcessedBucketName": {
             "Description": "The processed bucket created is ",
             "Value": {"Ref":  "ProcessedBucketName"  }
+		},
+		"CreateSQSTriggerLambdaFunctionArn": {
+			"Description": "The Lambda function check SQS queue for data ingestion job on regular basis and send SNS message.",
+			"Value": { "Fn::GetAtt":["CreateSQSTriggerLambdaFunction", "Arn"] }
+		},
+		"GlueDatabaseName": {
+			"Description": "The Glue Database that can be queried in AWS Athena.",
+			"Value": { "Ref": "GlueDatabase" }
 		},
 		"StagingBucketIAMPolicyName": { 
 		    "Description": "The staging bucket policy  is ",
