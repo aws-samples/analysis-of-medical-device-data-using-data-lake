@@ -42,13 +42,13 @@
             "ConstraintDescription": "must begin with a letter and contain only lowercase alphanumeric characters and periods and dashes ."
         },
 		"ProcessedBucketFolderPrefix": {
-            "Default": "processed/folder",
+            "Default": "processed/folder/",
             "Description": "Processed Bucket Folder Prefix",
             "Type": "String",
             "MinLength": "1",
             "MaxLength": "64",
-            "AllowedPattern":  "[a-z0-9._/]*[a-z0-9]",
-            "ConstraintDescription": "Contain only  alphanumeric characters ,  period (.) , forward slash (/)  and underscore (_) ."
+            "AllowedPattern":  "[a-z0-9._/]*[a-z0-9]/",
+            "ConstraintDescription": "Contain only  alphanumeric characters ,  period (.) , forward slash (/)  and underscore (_). It must end with / ."
         },
 		"SQStriggerqueueName": {
             "Default": "sqs_name",
@@ -66,16 +66,16 @@
             "MinLength": "1",
             "MaxLength": "64",
             "AllowedPattern":  "[a-zA-Z0-9._/]*[a-z0-9A-Z]/",
-            "ConstraintDescription": "Contain only  alphanumeric characters ,  period (.) , forward slash (/)  and underscore (_) . It must end with / at the end ."
+            "ConstraintDescription": "Contain only  alphanumeric characters ,  period (.) , forward slash (/)  and underscore (_). It must end with / ."
         },
 		"DataLakeS3FolderPrefix": {
             "Description": "DataLake Target S3 Folder Prefix ",
-			"Default": "datalake/folder",
+			"Default": "datalake/MIoT/",
             "Type": "String",
             "MinLength": "1",
             "MaxLength": "64",
-            "AllowedPattern":  "[a-zA-Z0-9._/]*[a-z0-9A-Z]",
-            "ConstraintDescription": "must begin with a letter and contain only  alphanumeric characters ,  period (.) , forward slash (/)  and underscore (_) ."
+            "AllowedPattern":  "[a-zA-Z0-9._/]*[a-z0-9A-Z]/",
+            "ConstraintDescription": "must begin with a letter and contain only  alphanumeric characters, period (.) , forward slash (/) and underscore (_). It must end with / ."
         },
 		"EmailNotification": {
             "Description": "Enter email address to notify processing errors",
@@ -389,7 +389,8 @@
 							  "import json",
 							  "import boto3",
 							  "import urllib3",		
-							  "import datetime",							  
+							  "import datetime",	
+							  "import re",							  
 							  "ssm = boto3.client('ssm')",
 							  "sns = boto3.client('sns')",
 							  "glue = boto3.client('glue')",							  							  
@@ -421,10 +422,14 @@
 							  "    except Exception as inst:",  
 							  "        print(inst)",
 							  "        return \"not_found\"",
-							  "",
-							  "snsArn = getParameter('DL-datalake_failure_arn') ",
+							  "",							  
 							  "def lambda_handler(event, context):",
-							  "    print(event)",							  
+							  "    print(event)",					
+							  "    try : "   ,
+							  "        snsArn = getParameter('DL-datalake_failure_arn') ",					
+							  "    except Exception  as inst:",
+							  "        print(\"error querying DL-datalake_failure_arn. Will retry based on sqs  visibility timeout value\")",
+							  "        return ",
 							  "    for record in event['Records']:",
 							  "        payload=record['body']",
 							  "        payloadStr = str(payload)",
@@ -440,6 +445,10 @@
 							  "            print(\"the event type didnt match test event \")",            
 							  "        bucket_name = x['Records'][0]['s3']['bucket']['name']",
 							  "        file_key = x['Records'][0]['s3']['object']['key']",
+							  "        x = re.search(\"/$\", file_key)",
+							  "        if x:",
+							  "            print(\"received a folder : \" + file_key + \" . Hence ignoring \")",
+							  "            return ",
 							  "        originalTime = checkIfFileAlreadyProcessed(file_key)",
                               "        if originalTime != \"not_found\" :",
 							  "            print(\"file already processed \" + file_key)",

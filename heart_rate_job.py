@@ -71,13 +71,18 @@ def moveFile(bucket_name, file_key):
         "Bucket": bucket_name,
         "Key": file_key
     }
-
+    
     target_prefix = getParameter("DL-processed_location_prefix")
     target_bucket = getParameter("DL-processed_bucket")
     s1_split = re.split("/", file_key)
     object_name = s1_split[-1]
-
-    otherkey = target_prefix + "/" + object_name
+    
+    ## check if the prefix ends with /. If so, dont add / 
+    separator = "/"
+    x = re.search("/$", target_prefix)
+    if x:
+        separator = "" 
+    otherkey = target_prefix + separator + object_name
     print("Processed File bucket  is " + target_bucket)
     print("Processed target key is " + otherkey)
 
@@ -138,9 +143,16 @@ def glueHandler(buketname, filename):
     print("new cols " + str(dataframe.shape[1]))
 
     # print (dataframe)
-
+    
     path = "s3://" + getParameter("DL-datalake_target_bucket") + "/"
-    path = path + getParameter("DL-datalake_bucket_prefix") + "/"
+    folderPrefix = getParameter("DL-datalake_bucket_prefix")
+    
+    separator = "/"
+    x = re.search("/$", folderPrefix)
+    if x:
+        separator = "" 
+    path = path + folderPrefix + separator
+    
     partition_cols = ["metric", "year_value", "month_value",
                       "day_value", "patient_id"]
     print("the location in the datalake is " + path)
