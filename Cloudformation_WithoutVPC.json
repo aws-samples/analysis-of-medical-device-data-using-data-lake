@@ -518,7 +518,10 @@
 		"StagingBucket": {
 			"Type": "AWS::S3::Bucket",
 			"DependsOn":["SQSPublishPolicy", "SQSTriggerQueue"],
-			"Properties" : {			
+			"Properties" : {
+			    "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },		
 				"AccessControl": "Private",
 				"NotificationConfiguration": {
                     "QueueConfigurations": [ {
@@ -551,7 +554,10 @@
 		},
 		"DataLakeBucket": {
 			"Type": "AWS::S3::Bucket",			 
-			"Properties" : {			
+			"Properties" : {
+			    "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },		
 				"AccessControl": "Private",                 
 				"BucketEncryption" : {
 					"ServerSideEncryptionConfiguration" : [ {
@@ -569,7 +575,10 @@
 		},
 		"ProcessedBucket": {
 			"Type": "AWS::S3::Bucket",			 
-			"Properties" : {			
+			"Properties" : {
+			    "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },	
 				"AccessControl": "Private",                 
 				"BucketEncryption" : {
 					"ServerSideEncryptionConfiguration" : [ {
